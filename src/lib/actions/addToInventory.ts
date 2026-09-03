@@ -1,7 +1,7 @@
 'use server';
 
 import prisma from '@/lib/prisma';
-import { Prisma } from '@prisma/client';
+import { Prisma } from "@/generated/prisma/client";
 import { requireCurrentUserId } from "@/lib/current-user";
 import type { ManualInventoryInput } from '@/types';
 
