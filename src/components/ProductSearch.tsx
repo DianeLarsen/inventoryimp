@@ -67,11 +67,16 @@ export default function ProductSearch() {
       setResults(filteredResults);
 
       const uniqueBrands = Array.from(
-        new Set(data.map((item) => item.brand?.trim()).filter(Boolean)),
+        new Set(
+          data
+            .map((item) => item.brand?.trim())
+            .filter((brand): brand is string => Boolean(brand)),
+        ),
       );
-      const formattedBrands = uniqueBrands.map((b) => ({
-        value: b,
-        label: b,
+
+      const formattedBrands = uniqueBrands.map((brand) => ({
+        value: brand,
+        label: brand,
       }));
       setAvailableBrands(formattedBrands);
       setSelectedBrand("");
