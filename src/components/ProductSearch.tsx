@@ -34,19 +34,19 @@ export default function ProductSearch() {
   const [barcode, setBarcode] = useState("");
   const [limit, setLimit] = useState(10);
   const [existingInventory, setExistingInventory] = useState<InventoryItem[]>(
-    []
+    [],
   );
   const [showManualForm, setShowManualForm] = useState(false);
   const [modalItem, setModalItem] = useState<Partial<InventoryItem> | null>(
-    null
+    null,
   );
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    await getMatchingInventory(query);
+    const matchingInventory = await getMatchingInventory(query);
 
-    const requestId = Date.now();
-    activeRequestId.current = requestId; // ✅ update the ref
+    const requestId = activeRequestId.current + 1;
+    activeRequestId.current = requestId;
     setLoading(true);
 
     const formData = new FormData();
@@ -58,16 +58,16 @@ export default function ProductSearch() {
     const data = await searchProductAction(formData);
 
     if (requestId === activeRequestId.current) {
-      const existingUpcs = new Set(existingInventory.map((item) => item.upc));
+      const existingUpcs = new Set(matchingInventory.map((item) => item.upc));
 
       const filteredResults = data.filter(
-        (item) => !existingUpcs.has(item.upc || "")
+        (item) => !existingUpcs.has(item.upc || ""),
       );
 
       setResults(filteredResults);
 
       const uniqueBrands = Array.from(
-        new Set(data.map((item) => item.brand?.trim()).filter(Boolean))
+        new Set(data.map((item) => item.brand?.trim()).filter(Boolean)),
       );
       const formattedBrands = uniqueBrands.map((b) => ({
         value: b,
@@ -151,6 +151,7 @@ export default function ProductSearch() {
       }));
 
     setExistingInventory(matched);
+    return matched;
   };
 
   return (
@@ -235,8 +236,8 @@ export default function ProductSearch() {
                     backgroundColor: isSelected
                       ? "hsl(var(--primary))"
                       : isFocused
-                      ? "hsl(var(--muted))"
-                      : "hsl(var(--background))",
+                        ? "hsl(var(--muted))"
+                        : "hsl(var(--background))",
                     color: isSelected
                       ? "hsl(var(--primary-foreground))"
                       : "hsl(var(--foreground))",
@@ -337,8 +338,8 @@ export default function ProductSearch() {
               results.filter((item) =>
                 selectedBrand
                   ? item.brand?.toLowerCase() === selectedBrand.toLowerCase()
-                  : true
-              ).length
+                  : true,
+              ).length,
             )}{" "}
             of {results.length} total results
           </p>
@@ -361,7 +362,7 @@ export default function ProductSearch() {
                     selectedBrand
                       ? item.brand?.toLowerCase() ===
                         selectedBrand.toLowerCase()
-                      : true
+                      : true,
                   )
                   .slice(0, limit)
                   .map((item, index) => (
@@ -423,7 +424,7 @@ export default function ProductSearch() {
             await addToInventory(cleaned);
 
             setAddedItems((prev) =>
-              new Set(prev).add(cleaned.upc || cleaned.name || "")
+              new Set(prev).add(cleaned.upc || cleaned.name || ""),
             );
             setShowManualForm(false);
           }}
