@@ -1,28 +1,37 @@
-// lib/actions/updateItem.ts
-'use server'
-import type { InventoryItem } from '@/types';
-import prisma from '@/lib/prisma'
-import { revalidatePath } from 'next/cache'
+"use server";
+
+import { revalidatePath } from "next/cache";
+import type { InventoryItem } from "@/types";
+import prisma from "@/lib/prisma";
+import { requireCurrentUserId } from "@/lib/current-user";
 
 export async function updateItemQuantity(id: string, newQuantity: string) {
   try {
-    await prisma.inventoryItem.update({
-      where: { id },
-      data: { quantityAvailable: newQuantity },
-    })
+    const userId = await requireCurrentUserId();
 
-    revalidatePath('/inventory') // if your route is /inventory
-    return { success: true }
-  } catch (err) {
-    console.error('Update failed:', err)
-    return { success: false, message: 'Failed to update quantity' }
+    const result = await prisma.inventoryItem.updateMany({
+      where: { id, userId },
+      data: { quantityAvailable: newQuantity },
+    });
+
+    if (result.count === 0) {
+      return { success: false, message: "Inventory item not found." };
+    }
+
+    revalidatePath("/inventory");
+    return { success: true };
+  } catch (error) {
+    console.error("Update failed:", error);
+    return { success: false, message: "Failed to update quantity." };
   }
 }
 
 export async function updateInventoryItem(item: InventoryItem) {
   try {
-    await prisma.inventoryItem.update({
-      where: { id: item.id },
+    const userId = await requireCurrentUserId();
+
+    const result = await prisma.inventoryItem.updateMany({
+      where: { id: item.id, userId },
       data: {
         name: item.name,
         brand: item.brand,
@@ -37,10 +46,14 @@ export async function updateInventoryItem(item: InventoryItem) {
       },
     });
 
-    revalidatePath('/inventory');
+    if (result.count === 0) {
+      return { success: false, message: "Inventory item not found." };
+    }
+
+    revalidatePath("/inventory");
     return { success: true };
-  } catch (err) {
-    console.error('Error updating item:', err);
-    return { success: false, message: 'Failed to update item' };
+  } catch (error) {
+    console.error("Error updating item:", error);
+    return { success: false, message: "Failed to update item." };
   }
 }

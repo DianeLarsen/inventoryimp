@@ -2,11 +2,11 @@
 
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
-import { auth } from '@clerk/nextjs/server';
+import { requireCurrentUserId } from "@/lib/current-user";
 import type { ManualInventoryInput } from '@/types';
 
 export async function addToInventory(item: ManualInventoryInput) {
-  const { userId } = await auth();
+  const userId = await requireCurrentUserId();
   if (!userId) throw new Error('Not authenticated');
 
   await prisma.inventoryItem.create({

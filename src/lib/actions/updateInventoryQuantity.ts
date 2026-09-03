@@ -3,17 +3,21 @@
 // lib/actions/updateInventoryQuantity.ts
 
 import prisma from "@/lib/prisma";
+import { requireCurrentUserId } from "@/lib/current-user";
 
 export async function updateInventoryQuantity(
   upc: string | undefined,
   name: string,
   quantityToAdd: number
 ): Promise<{ success: boolean; message?: string }> {
+  const userId = await requireCurrentUserId();
+  if (!userId) throw new Error("Not authenticated");
   try {
     const match = upc
       ? await prisma.inventoryItem.findFirst({
           where: {
             upc: upc || undefined,
+            userId,
           },
         })
       : await prisma.inventoryItem.findFirst({
@@ -22,6 +26,7 @@ export async function updateInventoryQuantity(
               equals: name,
               mode: "insensitive",
             },
+            userId,
           },
         });
 
