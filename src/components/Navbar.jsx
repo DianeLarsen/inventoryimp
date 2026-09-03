@@ -2,13 +2,7 @@ import Link from "next/link";
 import { ThemeToggle } from "./theme-toggle";
 import MobileMenu from "./MobileMenu";
 import Image from "next/image";
-import {
-  ClerkLoaded,
-  ClerkLoading,
-  SignedIn,
-  SignedOut,
-  UserButton,
-} from "@clerk/nextjs";
+import { ClerkLoaded, ClerkLoading, Show, UserButton } from "@clerk/nextjs";
 
 const Navbar = () => {
   return (
@@ -27,7 +21,7 @@ const Navbar = () => {
             <div className="inline-block h-4 w-4 animate-spin rounded-full border-2  border-solid border-current border-e-transparent align-[-0.125em] text-surface motion-reduce:animate-[spin_1.5s_linear_infinite] dark:text-white" />
           </ClerkLoading>
           <ClerkLoaded>
-            <SignedIn>
+            <Show when="signed-in">
               <div className="flex gap-6 text-gray-600">
                 <ul className="flex items-center gap-6 text-sm font-light text-muted-foreground sm:gap-10">
                   <li className="transition-colors hover:text-foreground">
@@ -56,10 +50,10 @@ const Navbar = () => {
                 />
                 <Image src="/search.png" alt="" width={14} height={14} />
               </div>
-            </SignedIn>
-            <SignedOut>
+            </Show>
+            <Show when="signed-out">
               <div>Welcome to Grocery Inventory, sign in to continue</div>
-            </SignedOut>
+            </Show>
           </ClerkLoaded>
 
           <ThemeToggle />
@@ -70,14 +64,14 @@ const Navbar = () => {
             <div className="inline-block h-4 w-4 animate-spin rounded-full border-2  border-solid border-current border-e-transparent align-[-0.125em] text-surface motion-reduce:animate-[spin_1.5s_linear_infinite] dark:text-white" />
           </ClerkLoading>
           <ClerkLoaded>
-            <SignedIn>
+            <Show when="signed-in">
               <UserButton />
-            </SignedIn>
-            <SignedOut>
+            </Show>
+            <Show when="signed-out">
               <div className="flex items-center gap-2 text-sm">
                 <Link href="/sign-in">Login/Register</Link>
               </div>
-            </SignedOut>
+            </Show>
           </ClerkLoaded>
           <MobileMenu />
         </div>
