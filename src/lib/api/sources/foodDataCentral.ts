@@ -17,7 +17,7 @@ export async function searchFoodDataCentral({
   searchType,
   signal, // ✅ Accept it
 }: SearchOptions) {
-  const key = process.env.NEXT_PUBLIC_USDA_API_KEY;
+  const key = process.env.USDA_API_KEY;
   if (!key) throw new Error("Missing USDA_API_KEY");
 
   const searchTerm = barcode ? barcode : brand && query ? `${query} ${brand}` : query;
