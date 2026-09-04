@@ -1,16 +1,18 @@
-'use server';
-
 // lib/actions/deleteAllInventory.ts
-import prisma from '@/lib/prisma';
-import { auth } from '@clerk/nextjs/server';
+"use server";
+
+import { revalidatePath } from "next/cache";
+import prisma from "@/lib/prisma";
+import { requireCurrentUserId } from "@/lib/current-user";
 
 export async function deleteAllInventory() {
-    const { userId } = await auth();
-    if (!userId) throw new Error('Not authenticated');
-  try {
-    const deletedItems = await prisma.inventoryItem.deleteMany({});
-    console.log(`Deleted ${deletedItems.count} inventory items.`);
-  } catch (error) {
-    console.error("Error deleting inventory items:", error);
-  }
+  const userId = await requireCurrentUserId();
+
+  const deletedItems = await prisma.inventoryItem.deleteMany({
+    where: { userId },
+  });
+
+  revalidatePath("/inventory");
+
+  return { success: true, deletedCount: deletedItems.count };
 }

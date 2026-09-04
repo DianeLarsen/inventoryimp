@@ -2,7 +2,7 @@
 
 import { SignIn } from "@clerk/nextjs";
 import { useTheme } from "next-themes";
-import { dark  } from "@clerk/themes"; // ✅ Import themes
+import { dark  } from "@clerk/ui/themes"; // ✅ Import themes
 import { Suspense } from "react";
 
 export default function SignInPage() {
@@ -16,11 +16,10 @@ export default function SignInPage() {
     <SignIn
     
     appearance={{
-      baseTheme: resolvedTheme === "dark" ? dark : undefined,
+      theme: resolvedTheme === "dark" ? dark : undefined,
     }}
   />
   </Suspense>
-  </div>
-
+    </div>
   );
 }

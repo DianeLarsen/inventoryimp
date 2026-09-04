@@ -1,10 +1,10 @@
 'use server'
 
 import prisma from "@/lib/prisma";
-import { auth } from "@clerk/nextjs/server";
+import { requireCurrentUserId } from "@/lib/current-user";
 
 export async function getInventory() {
-  const { userId } = await auth();
+  const userId = await requireCurrentUserId();
   if (!userId) throw new Error("Not authenticated");
 
   const items = await prisma.inventoryItem.findMany({
