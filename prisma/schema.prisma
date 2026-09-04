@@ -44,6 +44,7 @@ model InventoryItem {
 model User {
   id             String          @id @default(cuid())
   inventoryItems InventoryItem[]
+  aiReceiptUsage AiReceiptUsage[]
 }
 
 model PurchaseHistory {
@@ -53,4 +54,17 @@ model PurchaseHistory {
   cost      Float
   quantity  Float
   purchasedAt DateTime @default(now())
+}
+
+model AiReceiptUsage {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  periodStart DateTime
+  parseCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, periodStart])
+  @@index([userId])
 }

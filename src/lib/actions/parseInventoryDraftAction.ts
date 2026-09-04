@@ -9,6 +9,10 @@ import {
 import type { ManualInventoryInput } from "@/types";
 import { requireCurrentUserId } from "@/lib/current-user";
 import { auth } from "@clerk/nextjs/server";
+import {
+  releaseAiReceiptParse,
+  reserveAiReceiptParse,
+} from "@/lib/ai-receipt-usage";
 
 const inventoryDraftInstructions = `
 Extract grocery or inventory items from the user's text.
@@ -33,7 +37,7 @@ Rules:
 export async function parseInventoryDraftAction(
   rawText: string,
 ): Promise<ManualInventoryInput[]> {
-  await requireCurrentUserId();
+  const userId = await requireCurrentUserId();
 
   const { has } = await auth();
 
@@ -42,6 +46,7 @@ export async function parseInventoryDraftAction(
       "AI receipt parsing requires the Home plan or an active free trial.",
     );
   }
+
   const text = rawText.trim();
 
   if (!text) {
@@ -58,24 +63,35 @@ export async function parseInventoryDraftAction(
     throw new Error("OPENAI_API_KEY is not configured.");
   }
 
-  const openai = new OpenAI({ apiKey });
+  const reservation = await reserveAiReceiptParse(userId);
 
-  const response = await openai.responses.parse({
-    model: "gpt-5.6-luna",
-    input: [
-      { role: "system", content: inventoryDraftInstructions },
-      { role: "user", content: text },
-    ],
-    text: {
-      format: zodTextFormat(inventoryDraftSchema, "inventory_drafts"),
-    },
-  });
+  try {
+    const openai = new OpenAI({ apiKey });
 
-  const parsed = response.output_parsed;
+    const response = await openai.responses.parse({
+      model: "gpt-5.6-luna",
+      input: [
+        { role: "system", content: inventoryDraftInstructions },
+        { role: "user", content: text },
+      ],
+      text: {
+        format: zodTextFormat(inventoryDraftSchema, "inventory_drafts"),
+      },
+    });
 
-  if (!parsed) {
-    throw new Error("The AI service did not return a usable inventory draft.");
+    const parsed = response.output_parsed;
+    if (parsed?.items.length === 0) {
+      throw new Error("The receipt did not contain any inventory items.");
+    }
+    if (!parsed) {
+      throw new Error(
+        "The AI service did not return a usable inventory draft.",
+      );
+    }
+
+    return parsed.items.map(toManualInventoryInput);
+  } catch (error) {
+    await releaseAiReceiptParse(userId, reservation);
+    throw error;
   }
-
-  return parsed.items.map(toManualInventoryInput);
 }
