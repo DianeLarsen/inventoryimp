@@ -9,6 +9,12 @@ import {
 } from "@/lib/utils";
 import { parseInventoryDraftAction } from "@/lib/actions/parseInventoryDraftAction";
 import { updateInventoryQuantity } from "@/lib/actions/updateInventoryQuantity";
+import Link from "next/link";
+import { useAuth } from "@clerk/nextjs";
+import {
+  BYO_AI_RECEIPT_PROMPT,
+  parseStructuredInventoryDraft,
+} from "@/lib/inventory-draft";
 
 type ParsedItemWithAction = {
   item: ManualInventoryInput;
@@ -28,6 +34,51 @@ export default function ReceiptParser({
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [store, setStore] = useState("fredmeyer");
+  const [structuredImportText, setStructuredImportText] = useState("");
+  const [promptCopied, setPromptCopied] = useState(false);
+  const { has, isLoaded } = useAuth();
+
+  const canUseAiReceiptParsing = isLoaded && has({ feature: "ai_receipt_parsing" });
+
+  const buildParsedItems = (drafts: ManualInventoryInput[]) => drafts.map((item) => {
+      const { match } = findMatchingInventoryItem(item, initialInventory);
+
+      const conflict =
+        match && !isProductSizeCompatible(item.productSize, match.productSize)
+          ? "Product size mismatch"
+          : undefined;
+
+      return {
+        item,
+        selected: !match && !conflict,
+        match,
+        conflict,
+      };
+    });
+
+  const handleStructuredImport = () => {
+    setParseError(null);
+
+    try {
+      const drafts = parseStructuredInventoryDraft(structuredImportText);
+      setParsedItems(buildParsedItems(drafts));
+    } catch (error) {
+      setParseError(
+        error instanceof Error
+          ? error.message
+          : "Could not import those receipt items.",
+      );
+    }
+  };
+
+  const handleCopyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(BYO_AI_RECEIPT_PROMPT);
+      setPromptCopied(true);
+    } catch {
+      setParseError("Could not copy the prompt. Please try again.");
+    }
+  };
 
   const handleParse = async () => {
     setParsing(true);
@@ -36,23 +87,7 @@ export default function ReceiptParser({
     try {
       const drafts = await parseInventoryDraftAction(text);
 
-      const items = drafts.map((item) => {
-        const { match } = findMatchingInventoryItem(item, initialInventory);
-
-        const conflict =
-          match && !isProductSizeCompatible(item.productSize, match.productSize)
-            ? "Product size mismatch"
-            : undefined;
-
-        return {
-          item,
-          selected: !match && !conflict,
-          match,
-          conflict,
-        };
-      });
-
-      setParsedItems(items);
+      setParsedItems(buildParsedItems(drafts));
     } catch (error) {
       console.error("Failed to parse inventory draft:", error);
       setParseError(
@@ -137,7 +172,43 @@ export default function ReceiptParser({
         value={text}
         onChange={(e) => setText(e.target.value)}
       />
+      <details className="rounded-md border bg-muted/30 p-4">
+        <summary className="cursor-pointer font-medium">
+          Use another AI instead — free
+        </summary>
 
+        <p className="mt-2 text-sm text-muted-foreground">
+          Copy the prompt, use ChatGPT, Gemini, or another AI, then paste only
+          the JSON result here. InventoryImp will validate it and let you review
+          every item before saving.
+        </p>
+
+        <div className="mt-3 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={handleCopyPrompt}
+            className="border px-3 py-2 rounded-md hover:bg-muted"
+          >
+            {promptCopied ? "Prompt copied" : "Copy import prompt"}
+          </button>
+        </div>
+
+        <textarea
+          className="mt-3 w-full min-h-[180px] p-3 border rounded-md font-mono text-xs"
+          placeholder='Paste JSON from your AI tool, starting with { "items": [...] }'
+          value={structuredImportText}
+          onChange={(event) => setStructuredImportText(event.target.value)}
+        />
+
+        <button
+          type="button"
+          onClick={handleStructuredImport}
+          disabled={!structuredImportText.trim()}
+          className="mt-3 border px-4 py-2 rounded-md hover:bg-muted disabled:opacity-60"
+        >
+          Import structured receipt
+        </button>
+      </details>
       {parseError && (
         <p role="alert" className="text-sm text-red-600">
           {parseError}
@@ -145,13 +216,29 @@ export default function ReceiptParser({
       )}
 
       <div className="flex flex-wrap gap-4">
-        <button
-          onClick={handleParse}
-          disabled={parsing || !text.trim()}
-          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-60"
-        >
-          {parsing ? "Parsing with AI..." : "Parse with AI"}
-        </button>
+        {!isLoaded ? (
+          <button
+            disabled
+            className="bg-blue-600 text-white px-4 py-2 rounded-md opacity-60"
+          >
+            Checking access...
+          </button>
+        ) : canUseAiReceiptParsing ? (
+          <button
+            onClick={handleParse}
+            disabled={parsing || !text.trim()}
+            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-60"
+          >
+            {parsing ? "Parsing with AI..." : "Parse with AI"}
+          </button>
+        ) : (
+          <Link
+            href="/pricing"
+            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+          >
+            Start 7-day free trial
+          </Link>
+        )}
         {parsedItems.length > 0 && (
           <button
             type="button"
