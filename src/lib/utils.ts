@@ -2,7 +2,11 @@
 
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import type { InventoryItem, ManualInventoryInput, ParsedReceiptItem } from "@/types";
+import type {
+  InventoryItem,
+  ManualInventoryInput,
+  ParsedReceiptItem,
+} from "@/types";
 import { deleteAllInventory } from "./actions/deleteAllInventory";
 
 export function cn(...inputs: ClassValue[]) {
@@ -23,13 +27,13 @@ const requiredFields: (keyof ManualInventoryInput)[] = [
 
 export function hasMissingFields(item: Partial<ManualInventoryInput>): boolean {
   return requiredFields.some(
-    (field) => !item[field] || item[field]?.toString().trim() === ""
+    (field) => !item[field] || item[field]?.toString().trim() === "",
   );
 }
 
 export function guessDecrementStep(
   productSize?: string | null,
-  unit?: string | null
+  unit?: string | null,
 ): string {
   if (!productSize || !unit) return "1";
 
@@ -58,7 +62,7 @@ export function guessDecrementStep(
 }
 
 export function normalizeToManualInput(
-  data: Partial<InventoryItem>
+  data: Partial<InventoryItem>,
 ): ManualInventoryInput {
   return {
     name: data.name ?? "Unnamed Item", // or throw an error if this is unacceptable
@@ -77,9 +81,11 @@ export function normalizeToManualInput(
   };
 }
 
-
 function parseFredMeyerReceipt(text: string): ParsedReceiptItem[] {
-  const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
   const items: ParsedReceiptItem[] = [];
 
   let current: ParsedReceiptItem | null = null;
@@ -88,11 +94,17 @@ function parseFredMeyerReceipt(text: string): ParsedReceiptItem[] {
     const line = lines[i];
 
     // Item name line (starts a new item)
-    if (line.match(/^(.*?),\s*\d+(\.\d+)?\s?(oz|lb|g|kg|ct|pack|dozen|ml|L|fl oz)$/i)) {
+    if (
+      line.match(
+        /^(.*?),\s*\d+(\.\d+)?\s?(oz|lb|g|kg|ct|pack|dozen|ml|L|fl oz)$/i,
+      )
+    ) {
       // Push previous item if exists
       if (current) items.push(current);
 
-      const match = line.match(/^(.*?),\s*(\d+(\.\d+)?\s?(oz|lb|g|kg|ct|pack|dozen|ml|L|fl oz))$/i);
+      const match = line.match(
+        /^(.*?),\s*(\d+(\.\d+)?\s?(oz|lb|g|kg|ct|pack|dozen|ml|L|fl oz))$/i,
+      );
       current = {
         name: match?.[1].trim() || line,
         productSize: match?.[2]?.trim() || "",
@@ -119,7 +131,10 @@ function parseFredMeyerReceipt(text: string): ParsedReceiptItem[] {
       }
 
       // Notes (sale/coupon)
-      if (line.toLowerCase().includes("coupon") || line.toLowerCase().includes("sale")) {
+      if (
+        line.toLowerCase().includes("coupon") ||
+        line.toLowerCase().includes("sale")
+      ) {
         current.notes += current.notes ? `; ${line}` : line;
       }
 
@@ -136,8 +151,6 @@ function parseFredMeyerReceipt(text: string): ParsedReceiptItem[] {
   return items;
 }
 
-
-
 export function parseWalmartReceipt(text: string): ParsedReceiptItem[] {
   const lines = text
     .split("\n")
@@ -149,7 +162,7 @@ export function parseWalmartReceipt(text: string): ParsedReceiptItem[] {
     const name = lines[i];
     const qtyLine = lines[i + 1]?.match(/^Qty:\s*([\d.]+)/);
     const priceLine = lines[i + 2]?.match(
-      /^\$(\d+(\.\d{2})?)\s*\$(\d+(\.\d{2})?)?/
+      /^\$(\d+(\.\d{2})?)\s*\$(\d+(\.\d{2})?)?/,
     );
 
     if (qtyLine && priceLine) {
@@ -185,6 +198,7 @@ export function parseWalmartReceipt(text: string): ParsedReceiptItem[] {
 
   return items;
 }
+
 export function parseSafewayReceipt(text: string): ParsedReceiptItem[] {
   const lines = text
     .split("\n")
@@ -219,7 +233,7 @@ export function parseSafewayReceipt(text: string): ParsedReceiptItem[] {
 
 export function parseReceiptText(
   text: string,
-  store: string
+  store: string,
 ): ParsedReceiptItem[] {
   if (store === "fredmeyer") return parseFredMeyerReceipt(text);
   if (store === "walmart") return parseWalmartReceipt(text);
@@ -229,21 +243,20 @@ export function parseReceiptText(
 
 export function convertParsedToManual(
   parsed: ParsedReceiptItem,
-  existingInventory: InventoryItem[]
+  existingInventory: InventoryItem[],
 ): ManualInventoryInput {
   const matched = parsed.upc
     ? existingInventory.find((item) => item.upc === parsed.upc)
     : existingInventory.find(
-        (item) => item.name.toLowerCase() === parsed.name.toLowerCase()
+        (item) => item.name.toLowerCase() === parsed.name.toLowerCase(),
       );
-// console.log("preconverted", parsed)
+  // console.log("preconverted", parsed)
   return {
     name: parsed.name,
     upc: parsed.upc,
     brand: matched?.brand ?? "",
     category: matched?.category ?? "",
-    productSize:
-      parsed?.productSize ?? "",
+    productSize: parsed?.productSize ?? "",
     quantityAvailable: parsed.quantity.toString(),
     unit: matched?.unit ?? "unit",
     location: matched?.location ?? "",
@@ -257,23 +270,26 @@ export function convertParsedToManual(
 }
 
 function normalize(str: string) {
-  return str.trim().toLowerCase();
+  return str
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 }
 
 export function findMatchingInventoryItem(
   incoming: ManualInventoryInput,
-  inventory: InventoryItem[]
+  inventory: InventoryItem[],
 ): { match?: InventoryItem; reason?: string } {
   if (incoming.upc) {
     const match = inventory.find(
-    (item) => item.upc?.toString().trim() === incoming.upc?.toString().trim()
-  );
+      (item) => item.upc?.toString().trim() === incoming.upc?.toString().trim(),
+    );
     if (match) return { match };
   }
-console.log("incoming", incoming)
-console.log("inventory", inventory)
+
   const matchByName = inventory.find(
-    (item) => normalize(item.name) === normalize(incoming.name)
+    (item) => normalize(item.name) === normalize(incoming.name),
   );
 
   if (matchByName) return { match: matchByName };
@@ -283,7 +299,7 @@ console.log("inventory", inventory)
 
 export function isProductSizeCompatible(
   a?: string | null,
-  b?: string | null
+  b?: string | null,
 ): boolean {
   if (!a || !b) return true;
   const unitA = a.replace(/[\d\s.]/g, "").toLowerCase();

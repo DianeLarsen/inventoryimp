@@ -4,18 +4,15 @@ import { useState } from "react";
 import { addToInventory } from "@/lib/actions/addToInventory";
 import type { InventoryItem, ManualInventoryInput } from "@/types";
 import {
-  convertParsedToManual,
-  parseReceiptText,
-  isProductSizeCompatible,
   findMatchingInventoryItem,
+  isProductSizeCompatible,
 } from "@/lib/utils";
+import { parseInventoryDraftAction } from "@/lib/actions/parseInventoryDraftAction";
 import { updateInventoryQuantity } from "@/lib/actions/updateInventoryQuantity";
-
-type ItemAction = "add" | "replace" | "skip";
 
 type ParsedItemWithAction = {
   item: ManualInventoryInput;
-  action: ItemAction;
+  selected: boolean;
   match?: InventoryItem;
   conflict?: string;
 };
@@ -28,49 +25,95 @@ export default function ReceiptParser({
   const [text, setText] = useState("");
   const [parsedItems, setParsedItems] = useState<ParsedItemWithAction[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [parsing, setParsing] = useState(false);
+  const [parseError, setParseError] = useState<string | null>(null);
   const [store, setStore] = useState("fredmeyer");
 
-  const handleParse = () => {
-    const rawItems = parseReceiptText(text, store);
-    const items = rawItems.map((parsed) => {
-      const manual = convertParsedToManual(parsed, initialInventory);
-      // console.log("after converted", manual)
-      // console.log(initialInventory)
-      const { match } = findMatchingInventoryItem(manual, initialInventory);
-      // console.log(match)
-      const conflict =
-        match && !isProductSizeCompatible(manual.productSize, match.productSize)
-          ? "Product size mismatch"
-          : undefined;
-      if (!match) {
-        console.log("No match found for:", manual.name, "UPC:", manual.upc);
-      }
+  const handleParse = async () => {
+    setParsing(true);
+    setParseError(null);
 
-      return {
-        item: manual,
-        action: (conflict ? "skip" : "add") as ItemAction,
-        match,
-        conflict,
-      };
-    });
+    try {
+      const drafts = await parseInventoryDraftAction(text);
 
-    setParsedItems(items);
+      const items = drafts.map((item) => {
+        const { match } = findMatchingInventoryItem(item, initialInventory);
+
+        const conflict =
+          match && !isProductSizeCompatible(item.productSize, match.productSize)
+            ? "Product size mismatch"
+            : undefined;
+
+        return {
+          item,
+          selected: !match && !conflict,
+          match,
+          conflict,
+        };
+      });
+
+      setParsedItems(items);
+    } catch (error) {
+      console.error("Failed to parse inventory draft:", error);
+      setParseError(
+        error instanceof Error
+          ? error.message
+          : "Could not parse those grocery items.",
+      );
+    } finally {
+      setParsing(false);
+    }
   };
 
   // const handleRemoveItem = (index: number) => {
   //   setParsedItems((prev) => prev.filter((_, i) => i !== index));
   // };
-  const handleAddAll = async () => {
+  const handleAddSelected = async () => {
+    const selectedIndexes = parsedItems
+      .map((entry, index) => (entry.selected ? index : -1))
+      .filter((index) => index !== -1);
+
+    if (selectedIndexes.length === 0) return;
+
     setSubmitting(true);
-    for (const entry of parsedItems) {
-      if (entry.action === "add" || entry.action === "replace") {
-        await addToInventory(entry.item);
+    setParseError(null);
+
+    const successfullyAdded = new Set<number>();
+    const failedNames: string[] = [];
+
+    for (const index of selectedIndexes) {
+      try {
+        await addToInventory(parsedItems[index].item);
+        successfullyAdded.add(index);
+      } catch (error) {
+        console.error("Failed to add inventory item:", error);
+        failedNames.push(parsedItems[index].item.name);
       }
     }
 
+    setParsedItems((previous) =>
+      previous.filter((_, index) => !successfullyAdded.has(index)),
+    );
+
+    if (failedNames.length > 0) {
+      setParseError(
+        `Could not add: ${failedNames.join(", ")}. Those items remain in the list.`,
+      );
+    }
+
     setSubmitting(false);
-    setText("");
-    setParsedItems([]);
+  };
+  const selectedCount = parsedItems.filter((entry) => entry.selected).length;
+
+  const toggleAll = () => {
+    const shouldSelectAll = parsedItems.some((entry) => !entry.selected);
+
+    setParsedItems((previous) =>
+      previous.map((entry) => ({
+        ...entry,
+        selected: shouldSelectAll,
+      })),
+    );
   };
 
   return (
@@ -90,24 +133,44 @@ export default function ReceiptParser({
 
       <textarea
         className="w-full min-h-[150px] p-3 border rounded-md"
-        placeholder="Paste your receipt here (Fred Meyer, Walmart, Safeway, etc.)"
+        placeholder="Paste a receipt or type grocery items, such as: 2 cans soup and 1 bag rice"
         value={text}
         onChange={(e) => setText(e.target.value)}
       />
-      <div className="flex gap-4">
+
+      {parseError && (
+        <p role="alert" className="text-sm text-red-600">
+          {parseError}
+        </p>
+      )}
+
+      <div className="flex flex-wrap gap-4">
         <button
           onClick={handleParse}
-          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+          disabled={parsing || !text.trim()}
+          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-60"
         >
-          Parse Receipt
+          {parsing ? "Parsing with AI..." : "Parse with AI"}
         </button>
         {parsedItems.length > 0 && (
           <button
-            onClick={handleAddAll}
-            disabled={submitting}
-            className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+            type="button"
+            onClick={toggleAll}
+            className="border px-4 py-2 rounded-md hover:bg-muted"
           >
-            {submitting ? "Adding..." : `Add ${parsedItems.length} Items`}
+            {selectedCount === parsedItems.length
+              ? "Deselect all"
+              : "Select all"}
+          </button>
+        )}
+
+        {parsedItems.length > 0 && (
+          <button
+            onClick={handleAddSelected}
+            disabled={submitting || selectedCount === 0}
+            className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:opacity-60"
+          >
+            {submitting ? "Adding..." : `Add ${selectedCount} selected`}
           </button>
         )}
       </div>
@@ -119,9 +182,26 @@ export default function ReceiptParser({
               className="p-3 border rounded bg-muted/50 text-sm flex justify-between items-start gap-4"
             >
               <div className="flex-1">
+                <label className="mb-2 flex items-center gap-2 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    checked={entry.selected}
+                    onChange={(event) =>
+                      setParsedItems((previous) =>
+                        previous.map((parsedItem, index) =>
+                          index === i
+                            ? { ...parsedItem, selected: event.target.checked }
+                            : parsedItem,
+                        ),
+                      )
+                    }
+                  />
+                  Add as a new inventory item
+                </label>
                 <strong>{entry.item.name}</strong> — Qty:{" "}
-                {entry.item.quantityAvailable} {entry.item.unit || ""} — Cost: $
-                {entry.item.cost} <br />
+                {entry.item.quantityAvailable} {entry.item.unit || ""}
+                {entry.item.cost && <> — Cost: ${entry.item.cost}</>}
+                <br />
                 {entry.item.upc && (
                   <span className="text-muted-foreground">
                     UPC: {entry.item.upc}
@@ -133,10 +213,11 @@ export default function ReceiptParser({
                       <>⚠️ Conflict: {entry.conflict}</>
                     ) : (
                       <>
-                        Matched to <strong>{entry.match?.name}</strong>
-                        {entry.match?.unit && ` (${entry.match.unit})`}
-                        {entry.match?.location && ` in ${entry.match.location}`}
-                        . Choose action:
+                        Matches <strong>{entry.match.name}</strong>
+                        {entry.match.unit && ` (${entry.match.unit})`}
+                        {entry.match.location && ` in ${entry.match.location}`}.
+                        Use “Add to current” to increase its quantity, or select
+                        this item to add it separately.
                       </>
                     )}
                   </div>
@@ -147,20 +228,20 @@ export default function ReceiptParser({
                       onClick={async () => {
                         try {
                           const qty = parseFloat(
-                            entry.item.quantityAvailable || "0"
+                            entry.item.quantityAvailable || "0",
                           );
                           const result = await updateInventoryQuantity(
                             entry.item.upc,
                             entry.item.name,
-                            qty
+                            qty,
                           );
                           if (result.success) {
                             setParsedItems((prev) =>
-                              prev.filter((_, idx) => idx !== i)
+                              prev.filter((_, idx) => idx !== i),
                             );
                           } else {
                             alert(
-                              result.message || "Failed to update quantity."
+                              result.message || "Failed to update quantity.",
                             );
                           }
                         } catch (err) {
@@ -173,41 +254,6 @@ export default function ReceiptParser({
                       Add to current
                     </button>
                   )}
-
-                  {entry.match && (
-                    <button
-                      onClick={() =>
-                        setParsedItems((prev) =>
-                          prev.map((p, idx) =>
-                            idx === i ? { ...p, action: "replace" } : p
-                          )
-                        )
-                      }
-                      className={`text-xs px-2 py-1 rounded border ${
-                        entry.action === "replace"
-                          ? "bg-blue-500 text-white"
-                          : "hover:bg-blue-100"
-                      }`}
-                    >
-                      Replace
-                    </button>
-                  )}
-                  <button
-                    onClick={() =>
-                      setParsedItems((prev) =>
-                        prev.map((p, idx) =>
-                          idx === i ? { ...p, action: "skip" } : p
-                        )
-                      )
-                    }
-                    className={`text-xs px-2 py-1 rounded border ${
-                      entry.action === "skip"
-                        ? "bg-red-500 text-white"
-                        : "hover:bg-red-100"
-                    }`}
-                  >
-                    Skip
-                  </button>
                 </div>
               </div>
               <button
