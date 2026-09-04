@@ -3,38 +3,56 @@ import { z } from "zod";
 import type { ManualInventoryInput } from "@/types";
 
 export const inventoryDraftSchema = z.object({
-  items: z
-    .array(
-      z.object({
-        name: z.string().trim().min(1),
-        quantity: z.number().positive(),
-        unit: z.string().trim().min(1).nullable(),
-        productSize: z.string().trim().min(1).nullable(),
-        brand: z.string().trim().min(1).nullable(),
-        category: z.string().trim().min(1).nullable(),
-        cost: z.number().nonnegative().nullable(),
-        notes: z.string().trim().min(1).nullable(),
-        upc: z.string().trim().min(1).nullable(),
-      }),
-    )
-    .max(200),
+  items: z.array(
+    z.object({
+      name: z.string(),
+      quantity: z.number(),
+      unit: z.string().nullable(),
+      productSize: z.string().nullable(),
+      brand: z.string().nullable(),
+      category: z.string().nullable(),
+      cost: z.number().nullable(),
+      notes: z.string().nullable(),
+      upc: z.string().nullable(),
+    }),
+  ),
 });
 
 export type InventoryDraft = z.infer<typeof inventoryDraftSchema>;
 type InventoryDraftItem = InventoryDraft["items"][number];
 
+function optionalText(value: string | null) {
+  const text = value?.trim();
+
+  return text || undefined;
+}
+
 export function toManualInventoryInput(
   item: InventoryDraftItem,
 ): ManualInventoryInput {
+  const name = item.name.trim();
+
+  if (!name) {
+    throw new Error("Every imported item needs a name.");
+  }
+
+  if (!Number.isFinite(item.quantity) || item.quantity <= 0) {
+    throw new Error(`"${name}" needs a quantity greater than zero.`);
+  }
+
+  if (item.cost !== null && (!Number.isFinite(item.cost) || item.cost < 0)) {
+    throw new Error(`"${name}" has an invalid cost.`);
+  }
+
   return {
-    name: item.name,
-    upc: item.upc ?? undefined,
-    brand: item.brand ?? undefined,
-    category: item.category ?? undefined,
-    productSize: item.productSize ?? undefined,
+    name,
+    upc: optionalText(item.upc),
+    brand: optionalText(item.brand),
+    category: optionalText(item.category),
+    productSize: optionalText(item.productSize),
     quantityAvailable: String(item.quantity),
-    unit: item.unit ?? undefined,
-    notes: item.notes ?? undefined,
+    unit: optionalText(item.unit),
+    notes: optionalText(item.notes),
     lowThreshold: undefined,
     imageUrl: undefined,
     decrementStep: "1",
@@ -61,6 +79,10 @@ export function parseStructuredInventoryDraft(
     throw new Error(
       "The receipt JSON is missing required fields or has an invalid item.",
     );
+  }
+
+  if (result.data.items.length === 0) {
+    throw new Error("The receipt did not contain any inventory items.");
   }
 
   return result.data.items.map(toManualInventoryInput);
