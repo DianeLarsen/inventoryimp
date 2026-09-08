@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import type { InventoryItem } from "@/types";
 import EditInventoryModal from "./EditInventoryModal";
@@ -82,10 +82,6 @@ export default function InventoryList({
     category: "",
     location: "",
   });
-
-  useEffect(() => {
-    setItems(initialItems);
-  }, [initialItems]);
 
   const categories = [
     ...new Set(
