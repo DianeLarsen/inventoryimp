@@ -24,7 +24,7 @@ type InventoryDraftItem = InventoryDraft["items"][number];
 function optionalText(value: string | null) {
   const text = value?.trim();
 
-  return text || undefined;
+  return text && text.toLowerCase() !== "null" ? text : undefined;
 }
 
 export function toManualInventoryInput(

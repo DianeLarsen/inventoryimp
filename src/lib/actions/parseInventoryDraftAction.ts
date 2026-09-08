@@ -13,6 +13,7 @@ import {
   releaseAiReceiptParse,
   reserveAiReceiptParse,
 } from "@/lib/ai-receipt-usage";
+import { enrichReceiptDrafts } from "@/lib/enrich-receipt-drafts";
 
 const inventoryDraftInstructions = `
 Extract grocery or inventory items from the user's text.
@@ -89,7 +90,7 @@ export async function parseInventoryDraftAction(
       );
     }
 
-    return parsed.items.map(toManualInventoryInput);
+    return enrichReceiptDrafts(parsed.items.map(toManualInventoryInput));
   } catch (error) {
     await releaseAiReceiptParse(userId, reservation);
     throw error;

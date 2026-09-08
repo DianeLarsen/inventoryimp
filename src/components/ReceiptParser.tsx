@@ -15,6 +15,8 @@ import {
   BYO_AI_RECEIPT_PROMPT,
   parseStructuredInventoryDraft,
 } from "@/lib/inventory-draft";
+import { parseReceiptImageAction } from "@/lib/actions/parseReceiptImageAction";
+import { enrichReceiptDraftsAction } from "@/lib/actions/enrichReceiptDraftsAction";
 
 type ParsedItemWithAction = {
   item: ManualInventoryInput;
@@ -36,11 +38,31 @@ export default function ReceiptParser({
   const [store, setStore] = useState("fredmeyer");
   const [structuredImportText, setStructuredImportText] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
+  const [receiptImage, setReceiptImage] = useState<File | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+
+  const updateParsedItem = (
+    index: number,
+    changes: Partial<ManualInventoryInput>,
+  ) => {
+    setParsedItems((previous) =>
+      previous.map((entry, entryIndex) =>
+        entryIndex === index
+          ? { ...entry, item: { ...entry.item, ...changes } }
+          : entry,
+      ),
+    );
+  };
+
   const { has, isLoaded } = useAuth();
 
-  const canUseAiReceiptParsing = isLoaded && has({ feature: "ai_receipt_parsing" });
+  const canUseAiReceiptParsing =
+    isLoaded && has({ feature: "ai_receipt_parsing" });
 
-  const buildParsedItems = (drafts: ManualInventoryInput[]) => drafts.map((item) => {
+  const buildParsedItems = (drafts: ManualInventoryInput[]) =>
+    drafts.map((item) => {
       const { match } = findMatchingInventoryItem(item, initialInventory);
 
       const conflict =
@@ -56,18 +78,49 @@ export default function ReceiptParser({
       };
     });
 
-  const handleStructuredImport = () => {
+  const handleStructuredImport = async () => {
+    setImporting(true);
     setParseError(null);
 
     try {
       const drafts = parseStructuredInventoryDraft(structuredImportText);
-      setParsedItems(buildParsedItems(drafts));
+      const enrichedDrafts = await enrichReceiptDraftsAction(drafts);
+
+      setParsedItems(buildParsedItems(enrichedDrafts));
     } catch (error) {
       setParseError(
         error instanceof Error
           ? error.message
           : "Could not import those receipt items.",
       );
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleReceiptImageScan = async () => {
+    if (!receiptImage) return;
+
+    setScanning(true);
+    setParseError(null);
+
+    try {
+      const formData = new FormData();
+      formData.set("receipt", receiptImage);
+
+      const drafts = await parseReceiptImageAction(formData);
+
+      setParsedItems(buildParsedItems(drafts));
+      setReceiptImage(null);
+    } catch (error) {
+      console.error("Failed to scan receipt image:", error);
+      setParseError(
+        error instanceof Error
+          ? error.message
+          : "Could not read that receipt image.",
+      );
+    } finally {
+      setScanning(false);
     }
   };
 
@@ -172,6 +225,34 @@ export default function ReceiptParser({
         value={text}
         onChange={(e) => setText(e.target.value)}
       />
+      {isLoaded && canUseAiReceiptParsing && (
+        <section className="rounded-md border bg-muted/30 p-4">
+          <h3 className="font-medium">Scan a receipt photo</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            JPG, PNG, or WebP up to 4 MB. Your image is processed to create
+            review drafts and is not saved by InventoryImp.
+          </p>
+
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            capture="environment"
+            className="mt-3 block text-sm"
+            onChange={(event) =>
+              setReceiptImage(event.target.files?.[0] ?? null)
+            }
+          />
+
+          <button
+            type="button"
+            onClick={handleReceiptImageScan}
+            disabled={scanning || !receiptImage}
+            className="mt-3 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-60"
+          >
+            {scanning ? "Reading receipt..." : "Scan receipt photo"}
+          </button>
+        </section>
+      )}
       <details className="rounded-md border bg-muted/30 p-4">
         <summary className="cursor-pointer font-medium">
           Use another AI instead — free
@@ -203,10 +284,10 @@ export default function ReceiptParser({
         <button
           type="button"
           onClick={handleStructuredImport}
-          disabled={!structuredImportText.trim()}
+          disabled={importing || !structuredImportText.trim()}
           className="mt-3 border px-4 py-2 rounded-md hover:bg-muted disabled:opacity-60"
         >
-          Import structured receipt
+          {importing ? "Looking up barcodes..." : "Import structured receipt"}
         </button>
       </details>
       {parseError && (
@@ -285,14 +366,83 @@ export default function ReceiptParser({
                   />
                   Add as a new inventory item
                 </label>
-                <strong>{entry.item.name}</strong> — Qty:{" "}
-                {entry.item.quantityAvailable} {entry.item.unit || ""}
-                {entry.item.cost && <> — Cost: ${entry.item.cost}</>}
-                <br />
-                {entry.item.upc && (
-                  <span className="text-muted-foreground">
-                    UPC: {entry.item.upc}
-                  </span>
+                {editingIndex === i ? (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <input
+                      value={entry.item.name}
+                      onChange={(event) =>
+                        updateParsedItem(i, { name: event.target.value })
+                      }
+                      className="rounded border bg-background px-2 py-1"
+                      placeholder="Item name"
+                    />
+                    <input
+                      value={entry.item.quantityAvailable ?? ""}
+                      onChange={(event) =>
+                        updateParsedItem(i, {
+                          quantityAvailable: event.target.value,
+                        })
+                      }
+                      className="rounded border bg-background px-2 py-1"
+                      placeholder="Quantity"
+                    />
+                    <input
+                      value={entry.item.unit ?? ""}
+                      onChange={(event) =>
+                        updateParsedItem(i, {
+                          unit: event.target.value || undefined,
+                        })
+                      }
+                      className="rounded border bg-background px-2 py-1"
+                      placeholder="Unit"
+                    />
+                    <input
+                      value={entry.item.productSize ?? ""}
+                      onChange={(event) =>
+                        updateParsedItem(i, {
+                          productSize: event.target.value || undefined,
+                        })
+                      }
+                      className="rounded border bg-background px-2 py-1"
+                      placeholder="Package size"
+                    />
+                    <input
+                      value={entry.item.upc ?? ""}
+                      onChange={(event) =>
+                        updateParsedItem(i, {
+                          upc: event.target.value || undefined,
+                        })
+                      }
+                      className="rounded border bg-background px-2 py-1"
+                      placeholder="UPC"
+                    />
+                    <input
+                      value={entry.item.cost ?? ""}
+                      onChange={(event) =>
+                        updateParsedItem(i, {
+                          cost: event.target.value || undefined,
+                        })
+                      }
+                      className="rounded border bg-background px-2 py-1"
+                      placeholder="Cost"
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <strong>{entry.item.name}</strong> — Qty:{" "}
+                    {entry.item.quantityAvailable} {entry.item.unit || ""}
+                    {entry.item.cost && <> — Cost: ${entry.item.cost}</>}
+                    <br />
+                    {entry.item.upc ? (
+                      <span className="text-muted-foreground">
+                        UPC: {entry.item.upc}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">
+                        No UPC detected
+                      </span>
+                    )}
+                  </>
                 )}
                 {entry.match && (
                   <div className="text-xs text-amber-700 mt-1">
@@ -310,6 +460,15 @@ export default function ReceiptParser({
                   </div>
                 )}
                 <div className="flex gap-2 mt-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setEditingIndex(editingIndex === i ? null : i)
+                    }
+                    className="text-xs px-2 py-1 rounded border hover:bg-muted"
+                  >
+                    {editingIndex === i ? "Done editing" : "Edit"}
+                  </button>
                   {entry.match && (
                     <button
                       onClick={async () => {

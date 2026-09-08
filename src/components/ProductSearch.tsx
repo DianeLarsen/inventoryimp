@@ -40,25 +40,39 @@ export default function ProductSearch() {
   const [modalItem, setModalItem] = useState<Partial<InventoryItem> | null>(
     null,
   );
+  const [hasSearched, setHasSearched] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const matchingInventory = await getMatchingInventory(query);
 
     const requestId = activeRequestId.current + 1;
     activeRequestId.current = requestId;
+
     setLoading(true);
+    setHasSearched(false);
+    setSearchError(null);
 
-    const formData = new FormData();
-    formData.append("query", query);
-    formData.append("barcode", barcode);
-    formData.append("limit", limit.toString());
-    formData.append("searchType", searchType);
+    try {
+      const matchingInventory = await getMatchingInventory(barcode || query);
 
-    const data = await searchProductAction(formData);
+      const formData = new FormData();
+      formData.append("query", query);
+      formData.append("barcode", barcode);
+      formData.append("limit", limit.toString());
+      formData.append("searchType", searchType);
 
-    if (requestId === activeRequestId.current) {
-      const existingUpcs = new Set(matchingInventory.map((item) => item.upc));
+      const data = await searchProductAction(formData);
+
+      if (requestId !== activeRequestId.current) {
+        return;
+      }
+
+      const existingUpcs = new Set(
+        matchingInventory
+          .map((item) => item.upc)
+          .filter((upc): upc is string => Boolean(upc)),
+      );
 
       const filteredResults = data.filter(
         (item) => !existingUpcs.has(item.upc || ""),
@@ -74,17 +88,28 @@ export default function ProductSearch() {
         ),
       );
 
-      const formattedBrands = uniqueBrands.map((brand) => ({
-        value: brand,
-        label: brand,
-      }));
-      setAvailableBrands(formattedBrands);
-      setSelectedBrand("");
-    } else {
-      console.log("⚠️ Ignoring stale search result");
-    }
+      setAvailableBrands(
+        uniqueBrands.map((brand) => ({
+          value: brand,
+          label: brand,
+        })),
+      );
 
-    setLoading(false);
+      setSelectedBrand("");
+      setHasSearched(true);
+    } catch (error) {
+      if (requestId === activeRequestId.current) {
+        setResults([]);
+        setHasSearched(true);
+        setSearchError(
+          error instanceof Error ? error.message : "Product search failed.",
+        );
+      }
+    } finally {
+      if (requestId === activeRequestId.current) {
+        setLoading(false);
+      }
+    }
   };
 
   const handleAddToInventory = async (item: ProductResult) => {
@@ -151,7 +176,7 @@ export default function ProductSearch() {
         imageUrl: item.imageUrl || null,
         notes: item.notes || null,
         lowThreshold: item.lowThreshold || null,
-        upc: item.barcode || "",
+        upc: item.upc || "",
         // Include any other required InventoryItem fields
       }));
 
@@ -440,9 +465,23 @@ export default function ProductSearch() {
       )}
 
       {/* ❌ No Results Found */}
-      {!loading && results && results.length === 0 && (
-        <p className="text-center text-orange-500 font-medium mt-4">
-          No results found. Please check your spelling and try again.
+      {searchError && (
+        <p role="alert" className="mt-4 text-center text-red-600">
+          Search failed: {searchError}
+        </p>
+      )}
+
+      {hasSearched && !loading && !searchError && results?.length === 0 && (
+        <p className="mt-4 text-center text-amber-600">
+          {barcode.trim() ? (
+            <>
+              No product found for barcode <code>{barcode}</code>. Check that
+              all digits were entered; it may be a store item code rather than a
+              UPC.
+            </>
+          ) : (
+            "No products found. Check the spelling and try again."
+          )}
         </p>
       )}
     </div>
