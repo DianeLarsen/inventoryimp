@@ -1,44 +1,176 @@
-import ProductSearch from "@/components/ProductSearch";
+import Link from "next/link";
+import {
+  ArrowRight,
+  ClipboardList,
+  PackagePlus,
+  ReceiptText,
+  ScanBarcode,
+  Sparkles,
+} from "lucide-react";
+import { getInventory } from "@/lib/actions/getInventory";
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const { userId } = await auth();
+
+  if (!userId) {
+    redirect("/");
+  }
+  const inventory = await getInventory();
+
+  const categoryCount = new Set(
+    inventory.map((item) => item.category?.trim()).filter(Boolean),
+  ).size;
+
   return (
-    <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold text-primary">Dashboard</h1>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Recipes Section */}
-        <div className="bg-card shadow-md rounded-xl p-4 col-span-2">
-          <h2 className="text-lg font-semibold mb-2">🍽️ Recipes You Can Make</h2>
-          <p className="text-muted-foreground text-sm">
-            Recipes using ingredients currently in stock.
+    <main className="mx-auto w-full max-w-6xl space-y-8 px-4 py-6 sm:px-6 lg:px-8">
+      <header className="flex flex-col gap-5 border-b border-border pb-8 sm:flex-row sm:items-end sm:justify-between">
+        <div className="max-w-2xl">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">
+            Inventory home
           </p>
-          <div className="mt-4 text-sm italic text-muted">Coming soon...</div>
-        </div>
-
-        {/* Grocery List */}
-        <div className="bg-card shadow-md rounded-xl p-4">
-          <h2 className="text-lg font-semibold mb-2">🛒 Grocery List</h2>
-          <p className="text-muted-foreground text-sm">
-            Items you&apos;ve added for your next grocery trip.
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+            Keep the kitchen from becoming a mystery box.
+          </h1>
+          <p className="mt-3 text-muted-foreground">
+            Search products, import receipts, and keep an honest view of what
+            you already own.
           </p>
-          <div className="mt-4 text-sm italic text-muted">Coming soon...</div>
         </div>
 
-        {/* Low Inventory Alerts */}
-        <div className="bg-card shadow-md rounded-xl p-4">
-          <h2 className="text-lg font-semibold mb-2">⚠️ Low Inventory</h2>
-          <p className="text-muted-foreground text-sm">
-            Things you&apos;re running low on.
+        <Link
+          href="/inventory"
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
+        >
+          <PackagePlus className="size-4" />
+          Open inventory
+        </Link>
+      </header>
+
+      <section className="grid gap-4 md:grid-cols-3">
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <p className="text-sm font-medium text-muted-foreground">
+            Inventory items
           </p>
-          <div className="mt-4 text-sm italic text-muted">Coming soon...</div>
+          <p className="mt-2 text-3xl font-bold text-foreground">
+            {inventory.length}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Products currently tracked
+          </p>
         </div>
 
-        {/* Product Search */}
-        <div className="bg-card shadow-md rounded-xl p-4 col-span-2">
-          <h2 className="text-lg font-semibold mb-2">🔎 Add to Inventory</h2>
-          <ProductSearch />
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <p className="text-sm font-medium text-muted-foreground">
+            Categories
+          </p>
+          <p className="mt-2 text-3xl font-bold text-foreground">
+            {categoryCount}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Organize now; regret nothing later
+          </p>
         </div>
-      </div>
-    </div>
+
+        <Link
+          href="/inventory"
+          className="group rounded-xl border border-primary/25 bg-primary/5 p-5 shadow-sm transition hover:border-primary/50 hover:bg-primary/10"
+        >
+          <div className="flex items-center justify-between">
+            <span className="inline-flex rounded-lg bg-primary/10 p-2 text-primary">
+              <ReceiptText className="size-5" />
+            </span>
+            <ArrowRight className="size-4 text-primary transition-transform group-hover:translate-x-1" />
+          </div>
+          <p className="mt-4 font-semibold text-foreground">
+            Add groceries with AI
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Paste a receipt or plain-English list, then review every item.
+          </p>
+        </Link>
+      </section>
+
+      <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <Sparkles className="size-5 text-primary" />
+                <h2 className="text-lg font-semibold text-foreground">
+                  Start here
+                </h2>
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                The three quickest ways to keep InventoryImp useful.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <Link
+              href="/inventory"
+              className="rounded-lg border border-border p-4 transition hover:border-primary/40 hover:bg-muted/50"
+            >
+              <ReceiptText className="size-5 text-primary" />
+              <h3 className="mt-3 font-medium text-foreground">
+                Parse a receipt
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Review AI drafts before saving.
+              </p>
+            </Link>
+
+            <Link
+              href="/inventory"
+              className="rounded-lg border border-border p-4 transition hover:border-primary/40 hover:bg-muted/50"
+            >
+              <ScanBarcode className="size-5 text-primary" />
+              <h3 className="mt-3 font-medium text-foreground">
+                Scan or search
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Find a packaged item to add.
+              </p>
+            </Link>
+
+            <Link
+              href="/inventory"
+              className="rounded-lg border border-border p-4 transition hover:border-primary/40 hover:bg-muted/50"
+            >
+              <PackagePlus className="size-5 text-primary" />
+              <h3 className="mt-3 font-medium text-foreground">Add manually</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                For produce, bulk items, or oddball pantry things.
+              </p>
+            </Link>
+          </div>
+        </div>
+
+        <aside className="rounded-xl border border-border bg-card p-6 shadow-sm">
+          <div className="flex items-center gap-2">
+            <ClipboardList className="size-5 text-primary" />
+            <h2 className="text-lg font-semibold text-foreground">Up next</h2>
+          </div>
+
+          <div className="mt-5 space-y-4">
+            <div className="border-l-2 border-primary pl-4">
+              <p className="font-medium text-foreground">Recipe suggestions</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Use your tracked ingredients to suggest meals worth making.
+              </p>
+            </div>
+
+            <div className="border-l-2 border-border pl-4">
+              <p className="font-medium text-foreground">Grocery planning</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Turn low-stock items and planned meals into a shopping list.
+              </p>
+            </div>
+          </div>
+        </aside>
+      </section>
+    </main>
   );
 }

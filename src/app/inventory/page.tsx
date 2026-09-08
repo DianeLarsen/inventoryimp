@@ -1,54 +1,59 @@
-// app/inventory/page.tsx
-
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import ProductSearch from "@/components/ProductSearch";
+import DeleteInventoryButton from "@/components/DeleteInventoryButton";
+import InventoryIntake from "@/components/InventoryIntake";
 import InventoryList from "@/components/InventoryList";
 import { getInventory } from "@/lib/actions/getInventory";
-import ManualAddForm from "@/components/ManualAddForm";
-import ReceiptParser from "@/components/ReceiptParser";
-import DeleteInventoryButton from "@/components/DeleteInventoryButton";
 
 export default async function InventoryPage() {
   const { userId } = await auth();
-  if (!userId) return redirect("/");
 
-  const items = await getInventory();
-  if (!items) {
-
+  if (!userId) {
+    redirect("/");
   }
 
- return (
-    <div className="p-6 space-y-6">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold">Inventory</h1>
-        <p className="text-muted-foreground">View and manage your inventory.</p>
-      </div>
+  const items = await getInventory();
 
-      <div className="bg-card p-4 rounded-xl shadow space-y-6">
+  return (
+    <main className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6">
+      <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <h2 className="text-lg font-semibold mb-4">🔎 Search & Add Products</h2>
-          <ProductSearch />
+          <p className="text-sm font-medium text-primary">Home inventory</p>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight">
+            Keep track of what you have
+          </h1>
+          <p className="mt-2 text-muted-foreground">
+            Add groceries, adjust quantities, and spot low-stock items.
+          </p>
         </div>
 
-        <hr />
+        <div className="rounded-full border bg-card px-4 py-2 text-sm font-medium">
+          {items.length} {items.length === 1 ? "item" : "items"} tracked
+        </div>
+      </header>
 
-        <div>
-          <h2 className="text-lg font-semibold mb-4">🧾 Add Groceries from Receipt</h2>
-          <ReceiptParser initialInventory={items} />
+      <InventoryIntake initialInventory={items} />
+
+      <section className="rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
+        <div className="mb-6">
+          <p className="text-sm font-medium text-primary">Your pantry</p>
+          <h2 className="mt-1 text-2xl font-semibold">Current inventory</h2>
         </div>
 
-        <hr />
+        <InventoryList initialItems={items} />
+      </section>
 
-        <div>
-          <h2 className="text-lg font-semibold mb-4">📝 Add Product Manually</h2>
-          <ManualAddForm />
+      <details className="rounded-xl border border-red-500/30 bg-red-500/5 p-4">
+        <summary className="cursor-pointer text-sm font-medium text-red-700 dark:text-red-400">
+          Danger zone
+        </summary>
+        <div className="pt-3">
+          <p className="text-sm text-muted-foreground">
+            Permanently delete every inventory item in your account.
+          </p>
+          <DeleteInventoryButton />
         </div>
-      </div>
-
-      <InventoryList initialItems={items} />
-      <DeleteInventoryButton />
-
-    </div>
+      </details>
+    </main>
   );
 }

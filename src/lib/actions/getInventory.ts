@@ -16,6 +16,7 @@ export async function getInventory() {
     ...item,
     addedAt: item.addedAt.toISOString(),
     updatedAt: item.updatedAt.toISOString(),
+    expiresAt: item.expiresAt?.toISOString() ?? null,
     decrementStep: item.decrementStep ?? undefined,
   }));
 }

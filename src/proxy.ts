@@ -1,22 +1,12 @@
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { clerkMiddleware } from "@clerk/nextjs/server";
 
-const isUnprotectedRoute = createRouteMatcher([
-  "/loading",
-  "/", // ✅ Add this line
-]);
-
-export default clerkMiddleware(async (auth, req: NextRequest) => {
-  if (isUnprotectedRoute(req)) {
-    console.log("✅ Allowing access to loading page:", req.url);
-
-    return NextResponse.next();
-  }
-})
+export default clerkMiddleware();
 
 export const config = {
-  matcher: ['/((?!_next).*)'], // apply to all routes except _next
-}
-
-
+  matcher: [
+    // Skip Next.js internals and static files.
+    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    // Always run Clerk for API routes.
+    "/(api|trpc)(.*)",
+  ],
+};

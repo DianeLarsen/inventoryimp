@@ -1,8 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Select from "react-select";
 import type { InventoryItem } from "@/types";
+import {
+  isPredefinedLocation,
+  predefinedLocations,
+  isPredefinedUnit,
+  predefinedUnits,
+} from "@/lib/inventory-options";
+import CreatableSelect from "react-select/creatable";
 
 type Props = {
   item: InventoryItem;
@@ -10,47 +16,13 @@ type Props = {
   onSave: (updatedItem: InventoryItem) => void;
 };
 
-const predefinedUnits = [
-  "jar",
-  "can",
-  "bottle",
-  "dozen",
-  "box",
-  "pack",
-  "lb",
-  "oz",
-  "g",
-  "kg",
-  "cup",
-  "tsp",
-  "tbsp",
-];
+function toDateInputValue(value: Date | string | null | undefined) {
+  if (!value) return "";
 
-
-  
-const predefinedLocations = [
-  "snack cabinet",
-  "left of oven cabinet",
-  "long counter cabinet 1",
-  "long counter cabinet 2",
-  "long counter cabinet 3",
-  "baking cabinet",
-  "noodle cabinet",
-  "spice cabinet",
-  "can cabinet",
-  "pantry",
-  "drawer 1",
-  "drawer 2",
-  "drawer 3",
-  "drawer 4",
-  "drawer 5",
-  "drawer 6",
-  "kitchen fridge",
-  "kitchen freezer",
-  "garage fridge freezer",
-  "garage fridge",
-  "garage large freezer",
-];
+  return typeof value === "string"
+    ? value.slice(0, 10)
+    : value.toISOString().slice(0, 10);
+}
 
 const customSelectStyles = {
   control: (base: any) => ({
@@ -72,8 +44,8 @@ const customSelectStyles = {
     backgroundColor: isSelected
       ? "hsl(var(--primary))"
       : isFocused
-      ? "hsl(var(--muted))"
-      : "hsl(var(--background))",
+        ? "hsl(var(--muted))"
+        : "hsl(var(--background))",
     color: isSelected
       ? "hsl(var(--primary-foreground))"
       : "hsl(var(--foreground))",
@@ -106,7 +78,6 @@ export default function EditInventoryModal({ item, onClose, onSave }: Props) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSave(formState);
-    onClose();
   };
 
   const unitOptions = [...predefinedUnits, ...customUnits].map((u) => ({
@@ -117,7 +88,7 @@ export default function EditInventoryModal({ item, onClose, onSave }: Props) {
     (loc) => ({
       value: loc,
       label: loc,
-    })
+    }),
   );
 
   return (
@@ -187,14 +158,11 @@ export default function EditInventoryModal({ item, onClose, onSave }: Props) {
               >
                 Unit
               </label>
-              <Select
+              <CreatableSelect
                 placeholder="Unit"
                 options={unitOptions}
                 onChange={(option) => {
-                  if (
-                    option?.value &&
-                    !predefinedUnits.includes(option.value)
-                  ) {
+                  if (option?.value && !isPredefinedUnit(option.value)) {
                     setCustomUnits((prev) => [...prev, option.value]);
                   }
                   setFormState((prev) => ({
@@ -221,14 +189,11 @@ export default function EditInventoryModal({ item, onClose, onSave }: Props) {
             >
               Location
             </label>
-            <Select
+            <CreatableSelect
               placeholder="Select or type location"
               options={locationOptions}
               onChange={(option) => {
-                if (
-                  option?.value &&
-                  !predefinedLocations.includes(option.value)
-                ) {
+                if (option?.value && !isPredefinedLocation(option.value)) {
                   setCustomLocations((prev) => [...prev, option.value]);
                 }
                 setFormState((prev) => ({
@@ -245,7 +210,23 @@ export default function EditInventoryModal({ item, onClose, onSave }: Props) {
               styles={customSelectStyles}
             />
           </div>
-
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium">Best by / expires on</span>
+            <input
+              type="date"
+              value={toDateInputValue(formState.expiresAt)}
+              onChange={(event) =>
+                setFormState((current) => ({
+                  ...current,
+                  expiresAt: event.target.value || undefined,
+                }))
+              }
+              className="rounded-md border bg-background px-3 py-2"
+            />
+            <span className="text-xs text-muted-foreground">
+              Optional. Leave blank when there is no useful date to track.
+            </span>
+          </label>
           <div className="mt-6 flex justify-end gap-2">
             <button type="button" onClick={onClose} className="btn-secondary">
               Cancel
