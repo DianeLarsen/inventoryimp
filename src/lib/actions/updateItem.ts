@@ -43,6 +43,9 @@ export async function updateInventoryItem(item: InventoryItem) {
         notes: item.notes,
         lowThreshold: item.lowThreshold,
         imageUrl: item.imageUrl,
+        expiresAt: item.expiresAt
+          ? new Date(`${item.expiresAt}T12:00:00.000Z`)
+          : null,
       },
     });
 

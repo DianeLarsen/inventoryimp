@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma';
 import { Prisma } from "@/generated/prisma/client";
 import { requireCurrentUserId } from "@/lib/current-user";
 import type { ManualInventoryInput } from '@/types';
+import { revalidatePath } from "next/cache";
 
 export async function addToInventory(item: ManualInventoryInput) {
   const userId = await requireCurrentUserId();
@@ -30,6 +31,9 @@ const shouldRecordPurchase =
       quantityAvailable: item.quantityAvailable || null,
       unit: item.unit || null,
       location: item.location || null,
+      expiresAt: item.expiresAt
+        ? new Date(`${item.expiresAt}T12:00:00.000Z`)
+        : null,
       notes: item.notes || null,
       lowThreshold: item.lowThreshold || null,
       imageUrl: item.imageUrl || null,
@@ -46,4 +50,5 @@ const shouldRecordPurchase =
       ingredients: Prisma.JsonNull,
     },
   });
+  revalidatePath("/inventory");
 }

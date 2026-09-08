@@ -31,6 +31,7 @@ model InventoryItem {
   ingredients       Json?
   nutrition         Json?
   decrementStep     String?
+  expiresAt         DateTime? @db.Date
   addedAt           DateTime @default(now())
   updatedAt         DateTime @updatedAt
   userId            String

@@ -1,82 +1,98 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { ClerkLoaded, ClerkLoading, Show, UserButton } from "@clerk/nextjs";
 import { ThemeToggle } from "./theme-toggle";
 import MobileMenu from "./MobileMenu";
-import Image from "next/image";
-import { ClerkLoaded, ClerkLoading, Show, UserButton } from "@clerk/nextjs";
+
+const navItems = [
+  { href: "/", label: "Dashboard" },
+  { href: "/inventory", label: "Inventory" },
+  { href: "/recipes", label: "Recipes" },
+];
 
 const Navbar = () => {
+  const pathname = usePathname();
+
   return (
-    <div className="h-24 flex items-center justify-between">
-      <nav className="container flex max-w-full items-center justify-between">
-        {/* LEFT */}
-        <div className="md:hidden lg:block w-[20%]">
-          <Link href="/" className="font-serif font-bold text-xl">
-            Grocery Inventory
+    <header className="py-3">
+      <nav className="surface-card violet-glow mx-auto flex h-16 max-w-7xl items-center gap-4 rounded-2xl px-4 sm:px-6">
+        <div className="flex flex-1 items-center">
+          <Link
+            href="/"
+            className="font-serif text-xl font-bold tracking-tight transition-colors hover:text-primary"
+          >
+            Inventory<span className="text-primary">Imp</span>
           </Link>
         </div>
-        {/* CENTER */}
-        <div className="hidden md:flex w-[50%] text-sm items-center justify-between">
-          {/* LINKS */}
+
+        <div className="hidden items-center gap-1 md:flex">
           <ClerkLoading>
-            <div className="inline-block h-4 w-4 animate-spin rounded-full border-2  border-solid border-current border-e-transparent align-[-0.125em] text-surface motion-reduce:animate-[spin_1.5s_linear_infinite] dark:text-white" />
+            <div className="size-4 animate-spin rounded-full border-2 border-primary border-r-transparent" />
           </ClerkLoading>
+
           <ClerkLoaded>
             <Show when="signed-in">
-              <div className="flex gap-6 text-gray-600">
-                <ul className="flex items-center gap-6 text-sm font-light text-muted-foreground sm:gap-10">
-                  <li className="transition-colors hover:text-foreground">
-                    <Link href="/" className="flex items-center gap-2">
-                      <span>Dashboard</span>
-                    </Link>
-                  </li>
-                  <li className="transition-colors hover:text-foreground">
-                    <Link href="/recipes" className="flex items-center gap-2">
-                      <span>Recipies</span>
-                    </Link>
-                  </li>
+              {navItems.map((item) => {
+                const isActive =
+                  item.href === "/"
+                    ? pathname === "/"
+                    : pathname === item.href ||
+                      pathname.startsWith(`${item.href}/`);
 
-                  <li className="transition-colors hover:text-foreground">
-                    <Link href="/inventory" className="flex items-center gap-2">
-                      <span>Inventory</span>
-                    </Link>
-                  </li>
-                </ul>
-              </div>
-              <div className="hidden xl:flex p-2 bg-slate-100 items-center rounded-xl">
-                <input
-                  type="text"
-                  placeholder="search..."
-                  className="bg-transparent outline-none"
-                />
-                <Image src="/search.png" alt="" width={14} height={14} />
-              </div>
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    data-active={isActive}
+                    aria-current={isActive ? "page" : undefined}
+                    className={`intake-tab rounded-md border-b-2 px-3 py-2 text-sm transition-colors ${
+                      isActive
+                        ? "border-primary font-semibold"
+                        : "border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
             </Show>
+
             <Show when="signed-out">
-              <div>Welcome to Grocery Inventory, sign in to continue</div>
+              <span className="text-sm text-muted-foreground">
+                Keep your pantry organized.
+              </span>
             </Show>
           </ClerkLoaded>
-
-          <ThemeToggle />
         </div>
-        {/* RIGHT */}
-        <div className="w-[30%] flex items-center gap-4 xl:gap-8 justify-end">
+
+        <div className="flex flex-1 items-center justify-end gap-3">
+          <ThemeToggle />
+
           <ClerkLoading>
-            <div className="inline-block h-4 w-4 animate-spin rounded-full border-2  border-solid border-current border-e-transparent align-[-0.125em] text-surface motion-reduce:animate-[spin_1.5s_linear_infinite] dark:text-white" />
+            <div className="size-4 animate-spin rounded-full border-2 border-primary border-r-transparent" />
           </ClerkLoading>
+
           <ClerkLoaded>
             <Show when="signed-in">
               <UserButton />
             </Show>
+
             <Show when="signed-out">
-              <div className="flex items-center gap-2 text-sm">
-                <Link href="/sign-in">Login/Register</Link>
-              </div>
+              <Link
+                href="/sign-in"
+                className="button-secondary rounded-md px-3 py-2 text-sm font-medium"
+              >
+                Sign in
+              </Link>
             </Show>
           </ClerkLoaded>
+
           <MobileMenu />
         </div>
       </nav>
-    </div>
+    </header>
   );
 };
 

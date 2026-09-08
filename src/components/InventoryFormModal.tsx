@@ -84,7 +84,7 @@ const predefinedLocations = [
   "garage fridge freezer",
   "garage fridge",
   "garage large freezer",
-  "counter"
+  "counter",
 ];
 const recommendedDecrement = (unit: string): string => {
   const lower = unit.toLowerCase();
@@ -128,8 +128,8 @@ const customSelectStyles = {
     backgroundColor: isSelected
       ? "hsl(var(--primary))"
       : isFocused
-      ? "hsl(var(--muted))"
-      : "hsl(var(--background))",
+        ? "hsl(var(--muted))"
+        : "hsl(var(--background))",
     color: isSelected
       ? "hsl(var(--primary-foreground))"
       : "hsl(var(--foreground))",
@@ -164,7 +164,7 @@ export default function InventoryFormModal({
   }
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -198,188 +198,222 @@ export default function InventoryFormModal({
         }`}
       >
         <h3 className="text-xl font-semibold mb-4">{title}</h3>
-<form onSubmit={handleSubmit} className="grid gap-4">
-  {/* Name */}
-  <label className="block">
-    <span className="block mb-1 text-sm font-medium text-foreground">Name</span>
-    <input
-      name="name"
-      value={form.name ?? ""}
-      onChange={handleChange}
-      className={`border p-2 rounded w-full ${
-        isMissing("name") ? "border-red-500 ring-1 ring-red-300" : ""
-      }`}
-      placeholder="e.g. Apples"
-    />
-  </label>
+        <form onSubmit={handleSubmit} className="grid gap-4">
+          {/* Name */}
+          <label className="block">
+            <span className="block mb-1 text-sm font-medium text-foreground">
+              Name
+            </span>
+            <input
+              name="name"
+              value={form.name ?? ""}
+              onChange={handleChange}
+              className={`border p-2 rounded w-full ${
+                isMissing("name") ? "border-red-500 ring-1 ring-red-300" : ""
+              }`}
+              placeholder="e.g. Apples"
+            />
+          </label>
 
-  {/* Brand */}
-  <label className="block">
-    <span className="block mb-1 text-sm font-medium text-foreground">Brand</span>
-    <input
-      name="brand"
-      value={form.brand ?? ""}
-      onChange={handleChange}
-      className="border p-2 rounded w-full"
-      placeholder="Optional brand"
-    />
-  </label>
+          {/* Brand */}
+          <label className="block">
+            <span className="block mb-1 text-sm font-medium text-foreground">
+              Brand
+            </span>
+            <input
+              name="brand"
+              value={form.brand ?? ""}
+              onChange={handleChange}
+              className="border p-2 rounded w-full"
+              placeholder="Optional brand"
+            />
+          </label>
 
-  {/* Category */}
-  <label className="block">
-    <span className="block mb-1 text-sm font-medium text-foreground">Category</span>
-    <TypedSelect
-      placeholder="Select a category"
-      options={categoryOptions}
-      onChange={(selectedOption: SelectOption | null) =>
-        setForm((prev) => ({
-          ...prev,
-          category: selectedOption?.value || "",
-        }))
-      }
-      value={
-        form.category
-          ? { value: form.category, label: form.category }
-          : null
-      }
-      styles={customSelectStyles}
-      isClearable
-    />
-  </label>
+          {/* Category */}
+          <label className="block">
+            <span className="block mb-1 text-sm font-medium text-foreground">
+              Category
+            </span>
+            <TypedSelect
+              placeholder="Select a category"
+              options={categoryOptions}
+              onChange={(selectedOption: SelectOption | null) =>
+                setForm((prev) => ({
+                  ...prev,
+                  category: selectedOption?.value || "",
+                }))
+              }
+              value={
+                form.category
+                  ? { value: form.category, label: form.category }
+                  : null
+              }
+              styles={customSelectStyles}
+              isClearable
+            />
+          </label>
 
-  {/* Product Size */}
-  <label className="block">
-    <span className="block mb-1 text-sm font-medium text-foreground">Product Size</span>
-    <input
-      name="productSize"
-      value={form.productSize ?? ""}
-      onChange={handleChange}
-      className={`border p-2 rounded w-full ${
-        isMissing("productSize") ? "border-red-500 ring-1 ring-red-300" : ""
-      }`}
-      placeholder="e.g. 32oz box"
-    />
-  </label>
+          {/* Product Size */}
+          <label className="block">
+            <span className="block mb-1 text-sm font-medium text-foreground">
+              Product Size
+            </span>
+            <input
+              name="productSize"
+              value={form.productSize ?? ""}
+              onChange={handleChange}
+              className={`border p-2 rounded w-full ${
+                isMissing("productSize")
+                  ? "border-red-500 ring-1 ring-red-300"
+                  : ""
+              }`}
+              placeholder="e.g. 32oz box"
+            />
+          </label>
 
-  {/* Quantity Available */}
-  <label className="block">
-    <span className="block mb-1 text-sm font-medium text-foreground">Quantity Available</span>
-    <input
-      name="quantityAvailable"
-      value={form.quantityAvailable ?? ""}
-      onChange={handleChange}
-      className={`border p-2 rounded w-full ${
-        isMissing("quantityAvailable") ? "border-red-500 ring-1 ring-red-300" : ""
-      }`}
-      placeholder="e.g. 1, 1/2"
-    />
-  </label>
+          {/* Quantity Available */}
+          <label className="block">
+            <span className="block mb-1 text-sm font-medium text-foreground">
+              Quantity Available
+            </span>
+            <input
+              name="quantityAvailable"
+              value={form.quantityAvailable ?? ""}
+              onChange={handleChange}
+              className={`border p-2 rounded w-full ${
+                isMissing("quantityAvailable")
+                  ? "border-red-500 ring-1 ring-red-300"
+                  : ""
+              }`}
+              placeholder="e.g. 1, 1/2"
+            />
+          </label>
 
-  {/* Unit */}
-  <label className="block">
-    <span className="block mb-1 text-sm font-medium text-foreground">Unit</span>
-    <TypedSelect
-      placeholder="Select unit"
-      options={unitOptions}
-      onChange={(selectedOption: SelectOption | null) => {
-        const value = selectedOption?.value || "";
-        setForm((prev) => ({
-          ...prev,
-          unit: value,
-          decrementStep: recommendedDecrement(value),
-        }));
-      }}
-      value={
-        form.unit
-          ? { value: form.unit, label: form.unit }
-          : null
-      }
-      styles={customSelectStyles}
-      isClearable
-    />
-  </label>
+          {/* Unit */}
+          <label className="block">
+            <span className="block mb-1 text-sm font-medium text-foreground">
+              Unit
+            </span>
+            <TypedSelect
+              placeholder="Select unit"
+              options={unitOptions}
+              onChange={(selectedOption: SelectOption | null) => {
+                const value = selectedOption?.value || "";
+                setForm((prev) => ({
+                  ...prev,
+                  unit: value,
+                  decrementStep: recommendedDecrement(value),
+                }));
+              }}
+              value={form.unit ? { value: form.unit, label: form.unit } : null}
+              styles={customSelectStyles}
+              isClearable
+            />
+          </label>
 
-  {/* Decrement Step */}
-  <label className="block">
-    <span className="block mb-1 text-sm font-medium text-foreground">Decrement Step</span>
-    <TypedSelect
-      placeholder="How much to subtract when used"
-      options={[
-        { value: "1", label: "Whole (e.g. can, loaf)" },
-        { value: "0.25", label: "Quarter (e.g. bag of chips)" },
-        { value: "0.1", label: "Tenth (e.g. bottle of ketchup)" },
-      ]}
-      onChange={(selectedOption: SelectOption | null) =>
-        setForm((prev) => ({
-          ...prev,
-          decrementStep: selectedOption?.value || "",
-        }))
-      }
-      value={
-        form.decrementStep
-          ? {
-              value: form.decrementStep,
-              label:
-                form.decrementStep === "1"
-                  ? "Whole (e.g. can, loaf)"
-                  : form.decrementStep === "0.25"
-                  ? "Quarter (e.g. bag of chips)"
-                  : "Tenth (e.g. bottle of ketchup)",
-            }
-          : null
-      }
-      styles={customSelectStyles}
-      isClearable
-    />
-  </label>
+          {/* Decrement Step */}
+          <label className="block">
+            <span className="block mb-1 text-sm font-medium text-foreground">
+              Decrement Step
+            </span>
+            <TypedSelect
+              placeholder="How much to subtract when used"
+              options={[
+                { value: "1", label: "Whole (e.g. can, loaf)" },
+                { value: "0.25", label: "Quarter (e.g. bag of chips)" },
+                { value: "0.1", label: "Tenth (e.g. bottle of ketchup)" },
+              ]}
+              onChange={(selectedOption: SelectOption | null) =>
+                setForm((prev) => ({
+                  ...prev,
+                  decrementStep: selectedOption?.value || "",
+                }))
+              }
+              value={
+                form.decrementStep
+                  ? {
+                      value: form.decrementStep,
+                      label:
+                        form.decrementStep === "1"
+                          ? "Whole (e.g. can, loaf)"
+                          : form.decrementStep === "0.25"
+                            ? "Quarter (e.g. bag of chips)"
+                            : "Tenth (e.g. bottle of ketchup)",
+                    }
+                  : null
+              }
+              styles={customSelectStyles}
+              isClearable
+            />
+          </label>
 
-  {/* Location */}
-  <label className="block">
-    <span className="block mb-1 text-sm font-medium text-foreground">Location</span>
-    <TypedSelect
-      placeholder="Where is it stored?"
-      options={locationOptions}
-      onChange={(selectedOption: SelectOption | null) =>
-        setForm((prev) => ({
-          ...prev,
-          location: selectedOption?.value || "",
-        }))
-      }
-      value={
-        form.location
-          ? { value: form.location, label: form.location }
-          : null
-      }
-      styles={customSelectStyles}
-      isClearable
-    />
-  </label>
+          {/* Location */}
+          <label className="block">
+            <span className="block mb-1 text-sm font-medium text-foreground">
+              Location
+            </span>
+            <TypedSelect
+              placeholder="Where is it stored?"
+              options={locationOptions}
+              onChange={(selectedOption: SelectOption | null) =>
+                setForm((prev) => ({
+                  ...prev,
+                  location: selectedOption?.value || "",
+                }))
+              }
+              value={
+                form.location
+                  ? { value: form.location, label: form.location }
+                  : null
+              }
+              styles={customSelectStyles}
+              isClearable
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium">Best by / expires on</span>
+            <input
+              type="date"
+              value={form.expiresAt ? form.expiresAt.slice(0, 10) : ""}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  expiresAt: event.target.value || undefined,
+                }))
+              }
+              className="rounded-md border bg-background px-3 py-2"
+            />
+            <span className="text-xs text-muted-foreground">
+              Optional. Leave blank when there is no useful date to track.
+            </span>
+          </label>
 
-  {/* Notes */}
-  <label className="block">
-    <span className="block mb-1 text-sm font-medium text-foreground">Notes</span>
-    <textarea
-      name="notes"
-      value={form.notes ?? ""}
-      onChange={handleChange}
-      className="border p-2 rounded w-full"
-      placeholder="e.g. For smoothies, preferred brand, etc."
-    />
-  </label>
+          {/* Notes */}
+          <label className="block">
+            <span className="block mb-1 text-sm font-medium text-foreground">
+              Notes
+            </span>
+            <textarea
+              name="notes"
+              value={form.notes ?? ""}
+              onChange={handleChange}
+              className="border p-2 rounded w-full"
+              placeholder="e.g. For smoothies, preferred brand, etc."
+            />
+          </label>
 
-  {/* Buttons */}
-  <div className="flex justify-end gap-2 mt-4">
-    {isModal && (
-      <button type="button" onClick={onClose} className="btn-secondary">
-        Cancel
-      </button>
-    )}
-    <button type="submit" disabled={isSaving} className="btn-primary">
-      {isSaving ? "Saving..." : "Save"}
-    </button>
-  </div>
-</form>
-
+          {/* Buttons */}
+          <div className="flex justify-end gap-2 mt-4">
+            {isModal && (
+              <button type="button" onClick={onClose} className="btn-secondary">
+                Cancel
+              </button>
+            )}
+            <button type="submit" disabled={isSaving} className="btn-primary">
+              {isSaving ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </form>
       </div>
     </Wrapper>
   );

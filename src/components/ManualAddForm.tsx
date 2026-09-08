@@ -30,6 +30,7 @@ export default function ManualAddForm() {
         notes: item.notes ?? undefined,
         imageUrl: undefined, // optional
         decrementStep: item.decrementStep ?? "1",
+        expiresAt: item.expiresAt ?? undefined,
       };
   
       await addToInventory(cleanedItem);

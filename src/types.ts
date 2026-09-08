@@ -11,7 +11,8 @@ export type InventoryItem = {
     unit?: string | null;               // e.g., "bag"
     location?: string | null;
     notes?: string | null;
-    lowThreshold?: string | null;
+  lowThreshold?: string | null;
+    expiresAt?: string | null;
     imageUrl?: string | null;
     addedAt?: string;                   // ISO strings if fetched from JSON/REST
     updatedAt?: string;
@@ -43,6 +44,7 @@ export type InventoryItem = {
     location?: string;
     notes?: string;
     lowThreshold?: string;
+    expiresAt?: string;
     imageUrl?: string;
     decrementStep: string;
     cost?: string;

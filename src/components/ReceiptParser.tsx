@@ -17,6 +17,7 @@ import {
 } from "@/lib/inventory-draft";
 import { parseReceiptImageAction } from "@/lib/actions/parseReceiptImageAction";
 import { enrichReceiptDraftsAction } from "@/lib/actions/enrichReceiptDraftsAction";
+import HomeFeatureBadge from "./HomeFeatureBadge";
 
 type ParsedItemWithAction = {
   item: ManualInventoryInput;
@@ -25,17 +26,20 @@ type ParsedItemWithAction = {
   conflict?: string;
 };
 
+type ReceiptMode = "photo" | "text" | "import";
+
 export default function ReceiptParser({
   initialInventory,
+  mode,
 }: {
   initialInventory: InventoryItem[];
+  mode: ReceiptMode;
 }) {
   const [text, setText] = useState("");
   const [parsedItems, setParsedItems] = useState<ParsedItemWithAction[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
-  const [store, setStore] = useState("fredmeyer");
   const [structuredImportText, setStructuredImportText] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
   const [receiptImage, setReceiptImage] = useState<File | null>(null);
@@ -206,90 +210,150 @@ export default function ReceiptParser({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-        <label className="text-sm font-medium">Store:</label>
-        <select
-          className="border px-3 py-2 rounded-md"
-          value={store}
-          onChange={(e) => setStore(e.target.value)}
-        >
-          <option value="fredmeyer">Fred Meyer</option>
-          <option value="walmart">Walmart</option>
-          <option value="safeway">Safeway</option>
-        </select>
-      </div>
+      {mode === "text" && (
+        <section className="intake-content-card space-y-3 rounded-xl p-4">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-medium text-primary">
+                AI receipt parsing
+              </p>
+              <HomeFeatureBadge
+                isLoaded={isLoaded}
+                isAvailable={canUseAiReceiptParsing}
+              />
+            </div>
 
-      <textarea
-        className="w-full min-h-[150px] p-3 border rounded-md"
-        placeholder="Paste a receipt or type grocery items, such as: 2 cans soup and 1 bag rice"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-      />
-      {isLoaded && canUseAiReceiptParsing && (
-        <section className="rounded-md border bg-muted/30 p-4">
-          <h3 className="font-medium">Scan a receipt photo</h3>
+            <h3 className="mt-1 text-lg font-semibold">Paste receipt text</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Paste grocery-list or receipt text, then review every item before
+              saving.
+            </p>
+          </div>
+
+          <textarea
+            className="w-full min-h-[180px] rounded-md border p-3"
+            placeholder="Paste a receipt or type grocery items, such as: 2 cans soup and 1 bag rice"
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+          />
+        </section>
+      )}
+
+      {mode === "photo" && (
+        <section className="intake-content-card rounded-xl p-5">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-medium text-primary">
+                AI receipt scan
+              </p>
+
+              <HomeFeatureBadge
+                isLoaded={isLoaded}
+                isAvailable={canUseAiReceiptParsing}
+              />
+            </div>
+
+            <h3 className="mt-1 text-lg font-semibold">Scan a receipt photo</h3>
+
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+              Upload a clear receipt image. You will review and edit every item
+              before anything is added to your inventory.
+            </p>
+          </div>
+
+          {!isLoaded ? (
+            <p className="mt-5 text-sm text-muted-foreground">
+              Checking access...
+            </p>
+          ) : canUseAiReceiptParsing ? (
+            <>
+              <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-primary/35 bg-primary/5 px-6 py-8 text-center transition hover:border-primary/65 hover:bg-primary/10">
+                <span className="text-sm font-medium">
+                  {receiptImage ? receiptImage.name : "Choose a receipt photo"}
+                </span>
+                <span className="mt-1 text-xs text-muted-foreground">
+                  JPG, PNG, or WebP · up to 4 MB
+                </span>
+
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  capture="environment"
+                  className="sr-only"
+                  onChange={(event) =>
+                    setReceiptImage(event.target.files?.[0] ?? null)
+                  }
+                />
+              </label>
+
+              {receiptImage && (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Ready to scan. Your image is used to create review drafts and
+                  is not saved by InventoryImp.
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={handleReceiptImageScan}
+                disabled={scanning || !receiptImage}
+                className="button-primary mt-5 rounded-md px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {scanning ? "Reading receipt..." : "Scan receipt"}
+              </button>
+            </>
+          ) : (
+            <div className="mt-5 rounded-xl border border-primary/20 bg-primary/5 p-4">
+              <p className="text-sm text-muted-foreground">
+                Receipt photo scanning is included with the Home plan and its
+                seven-day trial.
+              </p>
+
+              <Link
+                href="/pricing"
+                className="button-primary mt-3 inline-block rounded-md px-4 py-2 text-sm font-medium"
+              >
+                Start 7-day free trial
+              </Link>
+            </div>
+          )}
+        </section>
+      )}
+
+      {mode === "import" && (
+        <section className="intake-content-card rounded-xl p-4">
+          <h3 className="font-medium">Import from another AI — free</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            JPG, PNG, or WebP up to 4 MB. Your image is processed to create
-            review drafts and is not saved by InventoryImp.
+            Copy the prompt, use ChatGPT, Gemini, or another AI, then paste only
+            the JSON result here. InventoryImp validates it and lets you review
+            every item before saving.
           </p>
 
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            capture="environment"
-            className="mt-3 block text-sm"
-            onChange={(event) =>
-              setReceiptImage(event.target.files?.[0] ?? null)
-            }
+          <button
+            type="button"
+            onClick={handleCopyPrompt}
+            className="mt-3 rounded-md border px-3 py-2 text-sm hover:bg-muted"
+          >
+            {promptCopied ? "Prompt copied" : "Copy import prompt"}
+          </button>
+
+          <textarea
+            className="mt-3 min-h-[180px] w-full rounded-md border p-3 font-mono text-xs"
+            placeholder='Paste JSON from your AI tool, starting with { "items": [...] }'
+            value={structuredImportText}
+            onChange={(event) => setStructuredImportText(event.target.value)}
           />
 
           <button
             type="button"
-            onClick={handleReceiptImageScan}
-            disabled={scanning || !receiptImage}
-            className="mt-3 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-60"
+            onClick={handleStructuredImport}
+            disabled={importing || !structuredImportText.trim()}
+            className="mt-3 rounded-md border px-4 py-2 hover:bg-muted disabled:opacity-60"
           >
-            {scanning ? "Reading receipt..." : "Scan receipt photo"}
+            {importing ? "Looking up barcodes..." : "Import structured receipt"}
           </button>
         </section>
       )}
-      <details className="rounded-md border bg-muted/30 p-4">
-        <summary className="cursor-pointer font-medium">
-          Use another AI instead — free
-        </summary>
-
-        <p className="mt-2 text-sm text-muted-foreground">
-          Copy the prompt, use ChatGPT, Gemini, or another AI, then paste only
-          the JSON result here. InventoryImp will validate it and let you review
-          every item before saving.
-        </p>
-
-        <div className="mt-3 flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={handleCopyPrompt}
-            className="border px-3 py-2 rounded-md hover:bg-muted"
-          >
-            {promptCopied ? "Prompt copied" : "Copy import prompt"}
-          </button>
-        </div>
-
-        <textarea
-          className="mt-3 w-full min-h-[180px] p-3 border rounded-md font-mono text-xs"
-          placeholder='Paste JSON from your AI tool, starting with { "items": [...] }'
-          value={structuredImportText}
-          onChange={(event) => setStructuredImportText(event.target.value)}
-        />
-
-        <button
-          type="button"
-          onClick={handleStructuredImport}
-          disabled={importing || !structuredImportText.trim()}
-          className="mt-3 border px-4 py-2 rounded-md hover:bg-muted disabled:opacity-60"
-        >
-          {importing ? "Looking up barcodes..." : "Import structured receipt"}
-        </button>
-      </details>
       {parseError && (
         <p role="alert" className="text-sm text-red-600">
           {parseError}
@@ -297,29 +361,30 @@ export default function ReceiptParser({
       )}
 
       <div className="flex flex-wrap gap-4">
-        {!isLoaded ? (
-          <button
-            disabled
-            className="bg-blue-600 text-white px-4 py-2 rounded-md opacity-60"
-          >
-            Checking access...
-          </button>
-        ) : canUseAiReceiptParsing ? (
-          <button
-            onClick={handleParse}
-            disabled={parsing || !text.trim()}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-60"
-          >
-            {parsing ? "Parsing with AI..." : "Parse with AI"}
-          </button>
-        ) : (
-          <Link
-            href="/pricing"
-            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-          >
-            Start 7-day free trial
-          </Link>
-        )}
+        {mode === "text" &&
+          (!isLoaded ? (
+            <button
+              disabled
+              className="rounded-md bg-primary px-4 py-2 text-primary-foreground opacity-60"
+            >
+              Checking access...
+            </button>
+          ) : canUseAiReceiptParsing ? (
+            <button
+              onClick={handleParse}
+              disabled={parsing || !text.trim()}
+              className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:opacity-90 disabled:opacity-60"
+            >
+              {parsing ? "Parsing with AI..." : "Parse with AI"}
+            </button>
+          ) : (
+            <Link
+              href="/pricing"
+              className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:opacity-90"
+            >
+              Start 7-day free trial
+            </Link>
+          ))}
         {parsedItems.length > 0 && (
           <button
             type="button"
