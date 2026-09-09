@@ -6,19 +6,30 @@ import InventoryList from "@/components/InventoryList";
 import { getInventory } from "@/lib/actions/getInventory";
 
 export default async function InventoryPage() {
-  const { userId } = await auth();
+  const { userId, has } = await auth();
 
   if (!userId) {
     redirect("/");
   }
 
   const items = await getInventory();
-
+  const hasHome = has({ feature: "ai_receipt_parsing" });
   return (
     <main className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6">
       <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <p className="text-sm font-medium text-primary">Home inventory</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-sm font-medium text-primary">Home inventory</p>
+            <span
+              className={
+                hasHome
+                  ? "inline-flex rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary"
+                  : "inline-flex rounded-full border border-border bg-muted px-3 py-1 text-xs font-semibold text-muted-foreground"
+              }
+            >
+              {hasHome ? "Home plan" : "Free plan"}
+            </span>
+          </div>
           <h1 className="mt-1 text-3xl font-bold tracking-tight">
             Keep track of what you have
           </h1>
