@@ -121,7 +121,10 @@ export default function InventoryIntake({
                 role="tab"
                 aria-selected={isActive}
                 data-active={isActive}
-                onClick={() => {\n                  setSelectedMode(option.id);\n                  router.replace("/inventory", { scroll: false });\n                }}
+                onClick={() => {
+                  setSelectedMode(option.id);
+                  router.replace("/inventory", { scroll: false });
+                }}
                 className="intake-tab border-b-2 px-5 py-4 text-left transition sm:border-b-0 sm:border-r last:sm:border-r-0"
               >
                 <span className="block font-medium">{option.label}</span>
@@ -177,7 +180,8 @@ export default function InventoryIntake({
                         return;
                       }
 
-                      setSelectedReceiptMode(option.id);\n                      router.replace("/inventory?add=receipt", { scroll: false });
+                      setSelectedReceiptMode(option.id);
+                      router.replace("/inventory?add=receipt", { scroll: false });
                     }}
                     className="intake-tab border-b px-4 py-3 text-left last:border-b-0 sm:border-b-0 sm:border-r last:sm:border-r-0"
                   >
