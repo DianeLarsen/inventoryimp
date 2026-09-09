@@ -44,28 +44,36 @@ export default function InventoryIntake({
   const intakeRef = useRef<HTMLDetailsElement>(null);
   const searchParams = useSearchParams();
 
-  const [activeMode, setActiveMode] = useState<IntakeMode>("receipt");
-  const [receiptMode, setReceiptMode] = useState<ReceiptMode>("import");
-const router = useRouter();
-const { has, isLoaded } = useAuth();
+  const [selectedMode, setSelectedMode] = useState<IntakeMode>("receipt");
+  const [selectedReceiptMode, setSelectedReceiptMode] =
+    useState<ReceiptMode>("import");
+  const router = useRouter();
+  const { has, isLoaded } = useAuth();
 
-const canUseAiReceiptParsing =
-  isLoaded && has({ feature: "ai_receipt_parsing" });
+  const requestedMode = searchParams.get("add");
+  const requestedReceiptMode = searchParams.get("receipt");
+
+  const activeMode: IntakeMode =
+    requestedMode === "receipt" ||
+    requestedMode === "search" ||
+    requestedMode === "manual"
+      ? requestedMode
+      : selectedMode;
+
+  const receiptMode: ReceiptMode =
+    requestedReceiptMode === "photo" ||
+    requestedReceiptMode === "text" ||
+    requestedReceiptMode === "import"
+      ? requestedReceiptMode
+      : selectedReceiptMode;
+
+  const canUseAiReceiptParsing =
+    isLoaded && has({ feature: "ai_receipt_parsing" });
+
   useEffect(() => {
-    const add = searchParams.get("add");
-    const receipt = searchParams.get("receipt");
+    if (!requestedMode || !intakeRef.current) return;
 
-    if (!add || !intakeRef.current) return;
-
-    intakeRef.current.open = true; // native <details> property
-
-    if (add === "receipt" || add === "search" || add === "manual") {
-      setActiveMode(add);
-    }
-
-    if (receipt === "photo" || receipt === "text" || receipt === "import") {
-      setReceiptMode(receipt);
-    }
+    intakeRef.current.open = true;
 
     requestAnimationFrame(() => {
       intakeRef.current?.scrollIntoView({
@@ -73,7 +81,7 @@ const canUseAiReceiptParsing =
         block: "start",
       });
     });
-  }, [searchParams]);
+  }, [requestedMode]);
   return (
     <details
       ref={intakeRef}
@@ -113,7 +121,10 @@ const canUseAiReceiptParsing =
                 role="tab"
                 aria-selected={isActive}
                 data-active={isActive}
-                onClick={() => setActiveMode(option.id)}
+                onClick={() => {
+                  setSelectedMode(option.id);
+                  router.replace("/inventory", { scroll: false });
+                }}
                 className="intake-tab border-b-2 px-5 py-4 text-left transition sm:border-b-0 sm:border-r last:sm:border-r-0"
               >
                 <span className="block font-medium">{option.label}</span>
@@ -169,7 +180,8 @@ const canUseAiReceiptParsing =
                         return;
                       }
 
-                      setReceiptMode(option.id);
+                      setSelectedReceiptMode(option.id);
+                      router.replace("/inventory?add=receipt", { scroll: false });
                     }}
                     className="intake-tab border-b px-4 py-3 text-left last:border-b-0 sm:border-b-0 sm:border-r last:sm:border-r-0"
                   >
