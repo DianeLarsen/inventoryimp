@@ -12,6 +12,30 @@ import ReceiptParser from "./ReceiptParser";
 type IntakeMode = "receipt" | "search" | "manual";
 type ReceiptMode = "photo" | "text" | "import";
 
+// keep intakeOptions exactly as you have it
+const intakeOptions: {
+  id: IntakeMode;
+  label: string;
+  description: string;
+}[] = [
+  {
+    id: "receipt",
+    label: "Receipt",
+    description:
+      "Add groceries from a receipt photo, pasted text, or AI import.",
+  },
+  {
+    id: "search",
+    label: "Search product",
+    description: "Find an item by name or barcode.",
+  },
+  {
+    id: "manual",
+    label: "Add manually",
+    description: "Create an item when you already know its details.",
+  },
+];
+
 export default function InventoryIntake({
   initialInventory,
 }: {
@@ -22,11 +46,11 @@ export default function InventoryIntake({
 
   const [activeMode, setActiveMode] = useState<IntakeMode>("receipt");
   const [receiptMode, setReceiptMode] = useState<ReceiptMode>("import");
-  const router = useRouter();
-  const { has, isLoaded } = useAuth();
+const router = useRouter();
+const { has, isLoaded } = useAuth();
 
-  const canUseAiReceiptParsing =
-    isLoaded && has({ feature: "ai_receipt_parsing" });
+const canUseAiReceiptParsing =
+  isLoaded && has({ feature: "ai_receipt_parsing" });
   useEffect(() => {
     const add = searchParams.get("add");
     const receipt = searchParams.get("receipt");
@@ -42,13 +66,6 @@ export default function InventoryIntake({
     if (receipt === "photo" || receipt === "text" || receipt === "import") {
       setReceiptMode(receipt);
     }
-    if (receipt === "photo" || receipt === "text" || receipt === "import") {
-      const requestedAiMode = receipt === "photo" || receipt === "text";
-
-      setReceiptMode(
-        requestedAiMode && !canUseAiReceiptParsing ? "import" : receipt,
-      );
-    }
 
     requestAnimationFrame(() => {
       intakeRef.current?.scrollIntoView({
@@ -56,7 +73,7 @@ export default function InventoryIntake({
         block: "start",
       });
     });
-  }, [searchParams, canUseAiReceiptParsing]);
+  }, [searchParams]);
   return (
     <details
       ref={intakeRef}
@@ -86,28 +103,8 @@ export default function InventoryIntake({
           role="tablist"
           aria-label="Ways to add inventory"
         >
-          {[
-            {
-              id: "photo" as const,
-              label: "Scan photo",
-              detail: "Use a receipt image",
-              requiresAi: true,
-            },
-            {
-              id: "text" as const,
-              label: "Paste receipt",
-              detail: "Use receipt text",
-              requiresAi: true,
-            },
-            {
-              id: "import" as const,
-              label: "Import a list",
-              detail: "Paste structured JSON",
-              requiresAi: false,
-            },
-          ].map((option) => {
-            const isActive = receiptMode === option.id;
-            const isLocked = option.requiresAi && !canUseAiReceiptParsing;
+          {intakeOptions.map((option) => {
+            const isActive = activeMode === option.id;
 
             return (
               <button
@@ -115,27 +112,13 @@ export default function InventoryIntake({
                 type="button"
                 role="tab"
                 aria-selected={isActive}
-                aria-disabled={isLocked}
                 data-active={isActive}
-                onClick={() => {
-                  if (isLocked) {
-                    router.push("/pricing");
-                    return;
-                  }
-
-                  setReceiptMode(option.id);
-                }}
-                className="intake-tab border-b px-4 py-3 text-left last:border-b-0 sm:border-b-0 sm:border-r last:sm:border-r-0"
+                onClick={() => setActiveMode(option.id)}
+                className="intake-tab border-b-2 px-5 py-4 text-left transition sm:border-b-0 sm:border-r last:sm:border-r-0"
               >
-                <span className="flex items-center gap-1.5 text-sm font-medium">
-                  {option.label}
-                  {isLocked && (
-                    <Lock className="size-3.5 text-muted-foreground" />
-                  )}
-                </span>
-
-                <span className="intake-tab-description block text-xs">
-                  {isLocked ? "InventoryImp Home feature" : option.detail}
+                <span className="block font-medium">{option.label}</span>
+                <span className="intake-tab-description mt-1 block text-xs">
+                  {option.description}
                 </span>
               </button>
             );
@@ -154,19 +137,23 @@ export default function InventoryIntake({
                   id: "photo" as const,
                   label: "Scan photo",
                   detail: "Use a receipt image",
+                  requiresAi: true,
                 },
                 {
                   id: "text" as const,
                   label: "Paste receipt",
                   detail: "Use receipt text",
+                  requiresAi: true,
                 },
                 {
                   id: "import" as const,
-                  label: "Free AI import",
+                  label: "Import a list",
                   detail: "Paste structured JSON",
+                  requiresAi: false,
                 },
               ].map((option) => {
                 const isActive = receiptMode === option.id;
+                const isLocked = option.requiresAi && !canUseAiReceiptParsing;
 
                 return (
                   <button
@@ -174,15 +161,29 @@ export default function InventoryIntake({
                     type="button"
                     role="tab"
                     aria-selected={isActive}
+                    aria-disabled={isLocked}
                     data-active={isActive}
-                    onClick={() => setReceiptMode(option.id)}
+                    onClick={() => {
+                      if (isLocked) {
+                        router.push("/pricing");
+                        return;
+                      }
+
+                      setReceiptMode(option.id);
+                    }}
                     className="intake-tab border-b px-4 py-3 text-left last:border-b-0 sm:border-b-0 sm:border-r last:sm:border-r-0"
                   >
-                    <span className="block text-sm font-medium">
+                    <span className="flex items-center gap-1.5 text-sm font-medium">
                       {option.label}
+                      {isLocked && (
+                        <Lock className="size-3.5 text-muted-foreground" />
+                      )}
                     </span>
+
                     <span className="intake-tab-description block text-xs">
-                      {option.detail}
+                      {isLocked
+                        ? "InventoryImp Home — view pricing"
+                        : option.detail}
                     </span>
                   </button>
                 );
