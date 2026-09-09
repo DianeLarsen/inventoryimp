@@ -217,10 +217,7 @@ export default function ReceiptParser({
               <p className="text-sm font-medium text-primary">
                 AI receipt parsing
               </p>
-              <HomeFeatureBadge
-                isLoaded={isLoaded}
-                isAvailable={canUseAiReceiptParsing}
-              />
+              <HomeFeatureBadge />
             </div>
 
             <h3 className="mt-1 text-lg font-semibold">Paste receipt text</h3>
@@ -247,10 +244,7 @@ export default function ReceiptParser({
                 AI receipt scan
               </p>
 
-              <HomeFeatureBadge
-                isLoaded={isLoaded}
-                isAvailable={canUseAiReceiptParsing}
-              />
+              <HomeFeatureBadge />
             </div>
 
             <h3 className="mt-1 text-lg font-semibold">Scan a receipt photo</h3>
