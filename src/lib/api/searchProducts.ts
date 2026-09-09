@@ -51,31 +51,29 @@ export async function searchProduct({
 
   // Barcode data is where Open Food Facts is useful.
   // If it is unavailable or has no match, USDA gets a chance.
-if (barcode) {
-  for (const barcodeCandidate of getBarcodeCandidates(barcode)) {
-    const lookupOptions = {
-      ...options,
-      query: barcodeCandidate,
-      barcode: barcodeCandidate,
-    };
+  if (barcode) {
+    for (const barcodeCandidate of getBarcodeCandidates(barcode)) {
+      const lookupOptions = {
+        ...options,
+        query: barcodeCandidate,
+        barcode: barcodeCandidate,
+      };
 
-    const openFoodFactsResults = await searchOpenFoodFacts(lookupOptions);
+      const openFoodFactsResults = await searchOpenFoodFacts(lookupOptions);
 
-    if (openFoodFactsResults.length > 0) {
-      return openFoodFactsResults;
+      if (openFoodFactsResults.length > 0) {
+        return openFoodFactsResults;
+      }
+
+      const usdaResults = await searchFoodDataCentral(lookupOptions);
+
+      if (usdaResults.length > 0) {
+        return usdaResults;
+      }
     }
 
-    const usdaResults = await searchFoodDataCentral(lookupOptions);
-
-    if (usdaResults.length > 0) {
-      return usdaResults;
-    }
+    return [];
   }
-
-  return [];
-}
-
-return searchFoodDataCentral(options);
 
   // USDA is the single source for normal typed searches.
   return searchFoodDataCentral(options);
