@@ -6,9 +6,42 @@ import { requireCurrentUserId } from "@/lib/current-user";
 import type { ManualInventoryInput } from "@/types";
 import { revalidatePath } from "next/cache";
 
+function parseDecimalValue(
+  label: string,
+  value: string | undefined,
+): string | null {
+  const trimmed = value?.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  if (!/^\d+(?:\.\d{1,3})?$/.test(trimmed)) {
+    throw new Error(
+      `${label} must be a number with up to three decimal places.`,
+    );
+  }
+
+  return trimmed;
+}
+
 export async function addToInventory(item: ManualInventoryInput) {
   const userId = await requireCurrentUserId();
   if (!userId) throw new Error("Not authenticated");
+
+  const quantityValue = parseDecimalValue(
+    "Quantity available",
+    item.quantityAvailable,
+  );
+  const lowThresholdValue = parseDecimalValue(
+    "Low-stock threshold",
+    item.lowThreshold,
+  );
+  const decrementStepValue = parseDecimalValue(
+    "Decrement step",
+    item.decrementStep,
+  );
+
  function parseCostCents(value: string | undefined) {
    const trimmed = value?.trim();
 
@@ -24,9 +57,7 @@ export async function addToInventory(item: ManualInventoryInput) {
  const costCents = parseCostCents(item.cost);
  const cost = costCents === null ? Number.NaN : costCents / 100;
 
- const quantity = item.quantityAvailable
-   ? Number.parseFloat(item.quantityAvailable)
-   : Number.NaN;
+const quantity = quantityValue ? Number(quantityValue) : Number.NaN;
 
  const shouldRecordPurchase =
    costCents !== null && Number.isFinite(quantity) && quantity > 0;
@@ -40,15 +71,21 @@ export async function addToInventory(item: ManualInventoryInput) {
       brand: item.brand || null,
       productSize: item.productSize || null,
       quantityAvailable: item.quantityAvailable || null,
-      unit: item.unit || null,
+      quantityValue,
+      unit:
+        item.unit?.trim() && item.unit.trim().toLowerCase() !== "null"
+          ? item.unit.trim()
+          : null,
       location: item.location || null,
       expiresAt: item.expiresAt
         ? new Date(`${item.expiresAt}T12:00:00.000Z`)
         : null,
       notes: item.notes || null,
       lowThreshold: item.lowThreshold || null,
+      lowThresholdValue,
       imageUrl: item.imageUrl || null,
       decrementStep: item.decrementStep || null,
+      decrementStepValue,
       purchaseHistory: shouldRecordPurchase
         ? {
             create: {
