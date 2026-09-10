@@ -1,24 +1,31 @@
 "use client";
 
 import { SignUp } from "@clerk/nextjs";
+import { dark } from "@clerk/ui/themes";
 import { useTheme } from "next-themes";
-import { dark } from "@clerk/ui/themes"; // ✅ Import themes
-import { Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 export default function SignUpPage() {
   const { resolvedTheme } = useTheme();
-  if (!resolvedTheme) return null; // avoid SSR mismatch
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   return (
     <div className="h-[calc(100vh-96px)] flex items-center justify-center">
-      <Suspense>
-        <SignUp
-          signInUrl="/sign-in"
-          forceRedirectUrl="/dashboard"
-          appearance={{
-            theme: resolvedTheme === "dark" ? dark : undefined,
-          }}
-        />
-      </Suspense>
+      {mounted && (
+        <Suspense>
+          <SignUp
+            signInUrl="/sign-in"
+            forceRedirectUrl="/dashboard"
+            appearance={{
+              theme: resolvedTheme === "dark" ? dark : undefined,
+            }}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
