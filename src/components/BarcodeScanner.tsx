@@ -6,14 +6,21 @@ type BarcodeScannerProps = {
   onDetected: (barcode: string) => void;
   onCancel: () => void;
 };
+
+type BarcodeDetectorInstance = {
+  detect(source: HTMLVideoElement): Promise<Array<{ rawValue: string }>>;
+};
+
+type BarcodeDetectorConstructor = {
+  new (options: { formats: string[] }): BarcodeDetectorInstance;
+  getSupportedFormats(): Promise<string[]>;
+};
+
 function isValidRetailBarcode(value: string) {
-  if (!/^\d{12,13}$/.test(value)) {
-    return false;
-  }
+  if (!/^\d{12,13}$/.test(value)) return false;
 
-  const digitsWithoutCheck = value.slice(0, -1);
-
-  const sum = digitsWithoutCheck
+  const sum = value
+    .slice(0, -1)
     .split("")
     .reverse()
     .reduce(
@@ -24,141 +31,122 @@ function isValidRetailBarcode(value: string) {
 
   return (10 - (sum % 10)) % 10 === Number(value.at(-1));
 }
+
 export default function BarcodeScanner({
   onDetected,
   onCancel,
 }: BarcodeScannerProps) {
-  const scannerRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const onDetectedRef = useRef(onDetected);
   const hasDetectedRef = useRef(false);
-    const detectedCandidateRef = useRef({ value: "", count: 0 });
-    const onDetectedRef = useRef(onDetected);
   const [error, setError] = useState<string | null>(null);
-useEffect(() => {
-  onDetectedRef.current = onDetected;
-}, [onDetected]);
+
   useEffect(() => {
-    let stopped = false;
-    let scannerStarted = false;
-    let stopScanner: (() => void) | null = null;
+    onDetectedRef.current = onDetected;
+  }, [onDetected]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let stream: MediaStream | null = null;
+    let scanTimer: number | null = null;
+
+    const stopCamera = () => {
+      if (scanTimer !== null) {
+        window.clearTimeout(scanTimer);
+      }
+
+      stream?.getTracks().forEach((track) => track.stop());
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+    };
 
     async function startScanner() {
+      const BarcodeDetector = (
+        window as unknown as {
+          BarcodeDetector?: BarcodeDetectorConstructor;
+        }
+      ).BarcodeDetector;
+
+      if (!BarcodeDetector) {
+        setError(
+          "Barcode scanning is not supported by this browser. Enter the barcode manually.",
+        );
+        return;
+      }
+
       try {
-        const { default: Quagga } = await import("@ericblade/quagga2");
+        const supportedFormats = await BarcodeDetector.getSupportedFormats();
+        const formats = ["upc_a", "ean_13"].filter((format) =>
+          supportedFormats.includes(format),
+        );
 
-        if (!scannerRef.current || stopped) return;
-
-        const handleDetected = (
-          result: { codeResult?: { code?: string | null } } | null,
-        ) => {
-          const barcode = result?.codeResult?.code;
-
-          if (!barcode || hasDetectedRef.current) return;
-
-          if (!isValidRetailBarcode(barcode)) {
-            console.info("Barcode scanner: rejected invalid result", barcode);
-            return;
-          }
-
-          if (detectedCandidateRef.current.value !== barcode) {
-            detectedCandidateRef.current = { value: barcode, count: 1 };
-            console.info("Barcode scanner: waiting for confirmation", barcode);
-            return;
-          }
-
-          detectedCandidateRef.current.count += 1;
-
-          if (detectedCandidateRef.current.count < 2) return;
-
-          console.info("Barcode scanner: confirmed", barcode);
-
-          hasDetectedRef.current = true;
-          stopScanner?.();
-          onDetectedRef.current(barcode);
-        };
-
-        const handleProcessed = (
-          result: { codeResult?: { code?: string | null } } | null,
-        ) => {
-          const candidate = result?.codeResult?.code;
-
-          if (candidate) {
-            console.info("Barcode scanner: candidate frame", candidate);
-          }
-        };
-
-        await new Promise<void>((resolve, reject) => {
-          Quagga.init(
-            {
-              inputStream: {
-                type: "LiveStream",
-                target: scannerRef.current!,
-                constraints: {
-                  facingMode: "environment",
-                  width: { ideal: 1280 },
-                  height: { ideal: 720 },
-                },
-              },
-              locator: {
-                patchSize: "medium",
-                halfSample: true,
-              },
-              numOfWorkers: navigator.hardwareConcurrency
-                ? Math.min(navigator.hardwareConcurrency, 4)
-                : 2,
-              frequency: 10,
-              decoder: {
-                readers: ["upc_reader", "ean_reader"],
-              },
-              locate: true,
-            },
-            (initError) => {
-              if (initError) {
-                reject(initError);
-                return;
-              }
-
-              resolve();
-            },
+        if (formats.length === 0) {
+          setError(
+            "This browser cannot scan UPC or EAN barcodes. Enter the barcode manually.",
           );
+          return;
+        }
+
+        const detector = new BarcodeDetector({ formats });
+
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
         });
 
-        if (stopped) return;
+        if (!videoRef.current || cancelled) {
+          stopCamera();
+          return;
+        }
 
-        Quagga.onDetected(handleDetected);
-        Quagga.onProcessed(handleProcessed);
-        Quagga.start();
-        scannerStarted = true;
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
 
-        stopScanner = () => {
-          if (!scannerStarted) return;
+        const scan = async () => {
+          if (cancelled || !videoRef.current || hasDetectedRef.current) return;
 
-          console.info("Barcode scanner: Stopped");
-          scannerStarted = false;
-          Quagga.offDetected(handleDetected);
-          Quagga.offProcessed(handleProcessed);
-          Quagga.stop();
+          try {
+            const results = await detector.detect(videoRef.current);
+            const barcode = results
+              .map((result) => result.rawValue.replace(/\D/g, ""))
+              .find(isValidRetailBarcode);
+
+            if (barcode) {
+              hasDetectedRef.current = true;
+              stopCamera();
+              onDetectedRef.current(barcode);
+              return;
+            }
+          } catch {
+            // A frame without a readable barcode is normal; keep scanning.
+          }
+
+          scanTimer = window.setTimeout(() => {
+            void scan();
+          }, 150);
         };
 
-        console.info("Barcode scanner: camera scanning");
+        void scan();
       } catch (error) {
-        console.error("Barcode scanner: failed to start", error);
-
         setError(
           error instanceof Error
             ? error.message
-            : "Unable to start the barcode scanner.",
+            : "Unable to start the camera.",
         );
       }
     }
 
-    const startTimer = window.setTimeout(() => {
-      void startScanner();
-    }, 0);
+    void startScanner();
 
     return () => {
-      stopped = true;
-      window.clearTimeout(startTimer);
-      stopScanner?.();
+      cancelled = true;
+      stopCamera();
     };
   }, []);
 
@@ -181,22 +169,27 @@ useEffect(() => {
         </button>
       </div>
 
-      <div
-        ref={scannerRef}
-        className="relative mt-4 aspect-video overflow-hidden rounded-lg bg-black [&_video]:h-full [&_video]:w-full [&_video]:object-cover"
-      >
-        <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center">
+      <div className="relative mt-4 overflow-hidden rounded-lg bg-black">
+        <video
+          ref={videoRef}
+          className="aspect-video w-full object-cover"
+          autoPlay
+          muted
+          playsInline
+        />
+
+        <div className="pointer-events-none absolute inset-0 grid place-items-center">
           <div className="h-28 w-4/5 rounded-lg border-2 border-primary shadow-[0_0_0_9999px_rgba(0,0,0,0.45)] sm:h-36 sm:w-3/5" />
         </div>
 
-        <p className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-black/70 px-3 py-1.5 text-xs font-medium text-white">
+        <p className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/70 px-3 py-1.5 text-xs font-medium text-white">
           Hold the barcode inside the frame
         </p>
       </div>
 
       {error && (
         <p role="alert" className="mt-3 text-sm text-destructive">
-          Camera unavailable: {error}
+          {error}
         </p>
       )}
     </section>

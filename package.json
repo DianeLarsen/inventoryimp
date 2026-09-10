@@ -15,7 +15,6 @@
   "dependencies": {
     "@clerk/nextjs": "^7.9.0",
     "@clerk/ui": "^1.32.1",
-    "@ericblade/quagga2": "^1.12.1",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "@radix-ui/react-slot": "^1.1.2",
