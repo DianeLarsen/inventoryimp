@@ -1,20 +1,21 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { BrowserMultiFormatReader } from "@zxing/browser";
+import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 
 type BarcodeScannerProps = {
   onDetected: (barcode: string) => void;
   onCancel: () => void;
 };
 
-type BarcodeDetectorInstance = {
-  detect(source: HTMLVideoElement): Promise<Array<{ rawValue: string }>>;
-};
+function normalizeBarcode(value: string) {
+  const digits = value.replace(/\D/g, "");
 
-type BarcodeDetectorConstructor = {
-  new (options: { formats: string[] }): BarcodeDetectorInstance;
-  getSupportedFormats(): Promise<string[]>;
-};
+  return digits.length === 13 && digits.startsWith("0")
+    ? digits.slice(1)
+    : digits;
+}
 
 function isValidRetailBarcode(value: string) {
   if (!/^\d{12,13}$/.test(value)) return false;
@@ -39,6 +40,7 @@ export default function BarcodeScanner({
   const videoRef = useRef<HTMLVideoElement>(null);
   const onDetectedRef = useRef(onDetected);
   const hasDetectedRef = useRef(false);
+  const candidateRef = useRef({ value: "", count: 0 });
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -47,92 +49,57 @@ export default function BarcodeScanner({
 
   useEffect(() => {
     let cancelled = false;
-    let stream: MediaStream | null = null;
-    let scanTimer: number | null = null;
-
-    const stopCamera = () => {
-      if (scanTimer !== null) {
-        window.clearTimeout(scanTimer);
-      }
-
-      stream?.getTracks().forEach((track) => track.stop());
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
-      }
-    };
+    let controls: { stop: () => void } | null = null;
 
     async function startScanner() {
-      const BarcodeDetector = (
-        window as unknown as {
-          BarcodeDetector?: BarcodeDetectorConstructor;
-        }
-      ).BarcodeDetector;
-
-      if (!BarcodeDetector) {
-        setError(
-          "Barcode scanning is not supported by this browser. Enter the barcode manually.",
-        );
-        return;
-      }
-
       try {
-        const supportedFormats = await BarcodeDetector.getSupportedFormats();
-        const formats = ["upc_a", "ean_13"].filter((format) =>
-          supportedFormats.includes(format),
-        );
+        if (!videoRef.current) return;
 
-        if (formats.length === 0) {
-          setError(
-            "This browser cannot scan UPC or EAN barcodes. Enter the barcode manually.",
-          );
-          return;
-        }
+        const hints = new Map();
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+          BarcodeFormat.UPC_A,
+          BarcodeFormat.EAN_13,
+        ]);
 
-        const detector = new BarcodeDetector({ formats });
+        const reader = new BrowserMultiFormatReader(hints);
 
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: {
-            facingMode: { ideal: "environment" },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
+        controls = await reader.decodeFromConstraints(
+          {
+            audio: false,
+            video: {
+              facingMode: { ideal: "environment" },
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+            },
           },
-        });
+          videoRef.current,
+          (result) => {
+            if (!result || hasDetectedRef.current) return;
 
-        if (!videoRef.current || cancelled) {
-          stopCamera();
-          return;
-        }
+            const barcode = normalizeBarcode(result.getText());
 
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-
-        const scan = async () => {
-          if (cancelled || !videoRef.current || hasDetectedRef.current) return;
-
-          try {
-            const results = await detector.detect(videoRef.current);
-            const barcode = results
-              .map((result) => result.rawValue.replace(/\D/g, ""))
-              .find(isValidRetailBarcode);
-
-            if (barcode) {
-              hasDetectedRef.current = true;
-              stopCamera();
-              onDetectedRef.current(barcode);
+            if (!isValidRetailBarcode(barcode)) {
               return;
             }
-          } catch {
-            // A frame without a readable barcode is normal; keep scanning.
-          }
 
-          scanTimer = window.setTimeout(() => {
-            void scan();
-          }, 150);
-        };
+            if (candidateRef.current.value !== barcode) {
+              candidateRef.current = { value: barcode, count: 1 };
+              return;
+            }
 
-        void scan();
+            candidateRef.current.count += 1;
+
+            if (candidateRef.current.count < 2) return;
+
+            hasDetectedRef.current = true;
+            controls?.stop();
+            onDetectedRef.current(barcode);
+          },
+        );
+
+        if (cancelled) {
+          controls.stop();
+        }
       } catch (error) {
         setError(
           error instanceof Error
@@ -146,7 +113,7 @@ export default function BarcodeScanner({
 
     return () => {
       cancelled = true;
-      stopCamera();
+      controls?.stop();
     };
   }, []);
 
