@@ -19,7 +19,6 @@ import {
   hasMissingFields,
   normalizeToManualInput,
 } from "@/lib/utils";
-import BarcodeScanner from "./BarcodeScanner";
 
 export default function ProductSearch() {
   const [query, setQuery] = useState("");
@@ -43,87 +42,75 @@ export default function ProductSearch() {
   );
   const [hasSearched, setHasSearched] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
-const runSearch = async (nextQuery: string, nextBarcode: string) => {
-  const trimmedQuery = nextQuery.trim();
-  const trimmedBarcode = nextBarcode.trim();
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
 
-  if (!trimmedQuery && !trimmedBarcode) {
-    setSearchError("Enter a product name or barcode.");
-    return;
-  }
+    const requestId = activeRequestId.current + 1;
+    activeRequestId.current = requestId;
 
-  const requestId = activeRequestId.current + 1;
-  activeRequestId.current = requestId;
+    setLoading(true);
+    setHasSearched(false);
+    setSearchError(null);
 
-  setLoading(true);
-  setHasSearched(false);
-  setSearchError(null);
+    try {
+      const matchingInventory = await getMatchingInventory(barcode || query);
 
-  try {
-    const matchingInventory = await getMatchingInventory(
-      trimmedBarcode || trimmedQuery,
-    );
+      const formData = new FormData();
+      formData.append("query", query);
+      formData.append("barcode", barcode);
+      formData.append("limit", limit.toString());
+      formData.append("searchType", searchType);
 
-    const formData = new FormData();
-    formData.append("query", trimmedQuery);
-    formData.append("barcode", trimmedBarcode);
-    formData.append("limit", limit.toString());
-    formData.append("searchType", searchType);
+      const data = await searchProductAction(formData);
 
-    const data = await searchProductAction(formData);
+      if (requestId !== activeRequestId.current) {
+        return;
+      }
 
-    if (requestId !== activeRequestId.current) return;
-
-    const existingUpcs = new Set(
-      matchingInventory
-        .map((item) => item.upc)
-        .filter((upc): upc is string => Boolean(upc)),
-    );
-
-    setResults(data.filter((item) => !existingUpcs.has(item.upc || "")));
-
-    const uniqueBrands = Array.from(
-      new Set(
-        data
-          .map((item) => item.brand?.trim())
-          .filter((brand): brand is string => Boolean(brand)),
-      ),
-    );
-
-    setAvailableBrands(
-      uniqueBrands.map((brand) => ({ value: brand, label: brand })),
-    );
-
-    setSelectedBrand("");
-    setHasSearched(true);
-  } catch (error) {
-    if (requestId === activeRequestId.current) {
-      setResults([]);
-      setHasSearched(true);
-      setSearchError(
-        error instanceof Error ? error.message : "Product search failed.",
+      const existingUpcs = new Set(
+        matchingInventory
+          .map((item) => item.upc)
+          .filter((upc): upc is string => Boolean(upc)),
       );
-    }
-  } finally {
-    if (requestId === activeRequestId.current) {
-      setLoading(false);
-    }
-  }
-};
 
-const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-  event.preventDefault();
-  void runSearch(query, barcode);
-};
+      const filteredResults = data.filter(
+        (item) => !existingUpcs.has(item.upc || ""),
+      );
 
-const handleBarcodeDetected = (scannedBarcode: string) => {
-  setBarcode(scannedBarcode);
-  setQuery("");
-  setIsScannerOpen(false);
-  void runSearch("", scannedBarcode);
-};
+      setResults(filteredResults);
+
+      const uniqueBrands = Array.from(
+        new Set(
+          data
+            .map((item) => item.brand?.trim())
+            .filter((brand): brand is string => Boolean(brand)),
+        ),
+      );
+
+      setAvailableBrands(
+        uniqueBrands.map((brand) => ({
+          value: brand,
+          label: brand,
+        })),
+      );
+
+      setSelectedBrand("");
+      setHasSearched(true);
+    } catch (error) {
+      if (requestId === activeRequestId.current) {
+        setResults([]);
+        setHasSearched(true);
+        setSearchError(
+          error instanceof Error ? error.message : "Product search failed.",
+        );
+      }
+    } finally {
+      if (requestId === activeRequestId.current) {
+        setLoading(false);
+      }
+    }
+  };
 
   const handleAddToInventory = async (item: ProductResult) => {
     const enrichedItem: ManualInventoryInput = {
@@ -226,14 +213,6 @@ const handleBarcodeDetected = (scannedBarcode: string) => {
             placeholder="Barcode (optional)"
             className="border p-2 rounded w-full md:w-1/3"
           />
-          <button
-            type="button"
-            onClick={() => setIsScannerOpen(true)}
-            disabled={loading}
-            className="rounded bg-muted px-4 py-2 text-foreground transition hover:bg-muted/70 disabled:opacity-60"
-          >
-            Scan barcode
-          </button>
         </div>
 
         <div className="flex flex-wrap gap-2 items-center">
@@ -249,6 +228,7 @@ const handleBarcodeDetected = (scannedBarcode: string) => {
           >
             <option value={10}>10</option>
             <option value={25}>25</option>
+            <option value={100}>100</option>
           </select>
 
           {/* Brand Filter */}
@@ -359,12 +339,7 @@ const handleBarcodeDetected = (scannedBarcode: string) => {
           )}
         </div>
       </form>
-      {isScannerOpen && (
-        <BarcodeScanner
-          onDetected={handleBarcodeDetected}
-          onCancel={() => setIsScannerOpen(false)}
-        />
-      )}
+
       {/* 🔍 Matching Inventory Section */}
       {existingInventory.length > 0 && (
         <section className="mt-8 border-2 border-primary rounded-lg p-4 bg-muted/20 shadow-sm">
