@@ -9,6 +9,10 @@ type BarcodeScannerProps = {
   onCancel: () => void;
 };
 
+type FocusCapabilities = MediaTrackCapabilities & {
+  focusMode?: string[];
+};
+
 function normalizeBarcode(value: string) {
   const digits = value.replace(/\D/g, "");
 
@@ -31,6 +35,28 @@ function isValidRetailBarcode(value: string) {
     );
 
   return (10 - (sum % 10)) % 10 === Number(value.at(-1));
+}
+
+async function requestContinuousFocus(video: HTMLVideoElement) {
+  const track = (video.srcObject as MediaStream | null)?.getVideoTracks()[0];
+
+  if (!track) return;
+
+  const capabilities = track.getCapabilities() as FocusCapabilities;
+
+  if (!capabilities.focusMode?.includes("continuous")) {
+    return;
+  }
+
+  try {
+    await track.applyConstraints({
+      advanced: [
+        { focusMode: "continuous" },
+      ] as unknown as MediaTrackConstraintSet[],
+    });
+  } catch {
+    // Some browsers expose the capability but decline the request.
+  }
 }
 
 export default function BarcodeScanner({
@@ -96,7 +122,9 @@ export default function BarcodeScanner({
             onDetectedRef.current(barcode);
           },
         );
-
+if (videoRef.current) {
+  await requestContinuousFocus(videoRef.current);
+}
         if (cancelled) {
           controls.stop();
         }
