@@ -49,11 +49,12 @@ model User {
 }
 
 model PurchaseHistory {
-  id        String   @id @default(cuid())
-  itemId    String
-  item      InventoryItem @relation(fields: [itemId], references: [id])
-  cost      Float
-  quantity  Float
+  id          String   @id @default(cuid())
+  itemId      String
+  item        InventoryItem @relation(fields: [itemId], references: [id])
+  cost        Float
+  costCents   Int?
+  quantity    Float
   purchasedAt DateTime @default(now())
 }
 
