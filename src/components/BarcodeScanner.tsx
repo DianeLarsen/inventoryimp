@@ -6,18 +6,40 @@ type BarcodeScannerProps = {
   onDetected: (barcode: string) => void;
   onCancel: () => void;
 };
+function isValidRetailBarcode(value: string) {
+  if (!/^\d{12,13}$/.test(value)) {
+    return false;
+  }
 
+  const digitsWithoutCheck = value.slice(0, -1);
+
+  const sum = digitsWithoutCheck
+    .split("")
+    .reverse()
+    .reduce(
+      (total, digit, index) =>
+        total + Number(digit) * (index % 2 === 0 ? 3 : 1),
+      0,
+    );
+
+  return (10 - (sum % 10)) % 10 === Number(value.at(-1));
+}
 export default function BarcodeScanner({
   onDetected,
   onCancel,
 }: BarcodeScannerProps) {
   const scannerRef = useRef<HTMLDivElement>(null);
   const hasDetectedRef = useRef(false);
+    const detectedCandidateRef = useRef({ value: "", count: 0 });
+    const onDetectedRef = useRef(onDetected);
   const [error, setError] = useState<string | null>(null);
-
+useEffect(() => {
+  onDetectedRef.current = onDetected;
+}, [onDetected]);
   useEffect(() => {
     let stopped = false;
-    let cleanupDetected: (() => void) | undefined;
+    let scannerStarted = false;
+    let stopScanner: (() => void) | null = null;
 
     async function startScanner() {
       try {
@@ -25,16 +47,43 @@ export default function BarcodeScanner({
 
         if (!scannerRef.current || stopped) return;
 
-        const handleDetected = (result: {
-          codeResult?: { code?: string | null };
-        }) => {
-          const barcode = result.codeResult?.code;
+        const handleDetected = (
+          result: { codeResult?: { code?: string | null } } | null,
+        ) => {
+          const barcode = result?.codeResult?.code;
 
           if (!barcode || hasDetectedRef.current) return;
 
+          if (!isValidRetailBarcode(barcode)) {
+            console.info("Barcode scanner: rejected invalid result", barcode);
+            return;
+          }
+
+          if (detectedCandidateRef.current.value !== barcode) {
+            detectedCandidateRef.current = { value: barcode, count: 1 };
+            console.info("Barcode scanner: waiting for confirmation", barcode);
+            return;
+          }
+
+          detectedCandidateRef.current.count += 1;
+
+          if (detectedCandidateRef.current.count < 2) return;
+
+          console.info("Barcode scanner: confirmed", barcode);
+
           hasDetectedRef.current = true;
-          Quagga.stop();
-          onDetected(barcode);
+          stopScanner?.();
+          onDetectedRef.current(barcode);
+        };
+
+        const handleProcessed = (
+          result: { codeResult?: { code?: string | null } } | null,
+        ) => {
+          const candidate = result?.codeResult?.code;
+
+          if (candidate) {
+            console.info("Barcode scanner: candidate frame", candidate);
+          }
         };
 
         await new Promise<void>((resolve, reject) => {
@@ -58,12 +107,7 @@ export default function BarcodeScanner({
                 : 2,
               frequency: 10,
               decoder: {
-                readers: [
-                  "ean_reader",
-                  "ean_8_reader",
-                  "upc_reader",
-                  "upc_e_reader",
-                ],
+                readers: ["upc_reader", "ean_reader"],
               },
               locate: true,
             },
@@ -78,15 +122,27 @@ export default function BarcodeScanner({
           );
         });
 
-        if (stopped) {
-          Quagga.stop();
-          return;
-        }
+        if (stopped) return;
 
         Quagga.onDetected(handleDetected);
-        cleanupDetected = () => Quagga.offDetected(handleDetected);
+        Quagga.onProcessed(handleProcessed);
         Quagga.start();
+        scannerStarted = true;
+
+        stopScanner = () => {
+          if (!scannerStarted) return;
+
+          console.info("Barcode scanner: Stopped");
+          scannerStarted = false;
+          Quagga.offDetected(handleDetected);
+          Quagga.offProcessed(handleProcessed);
+          Quagga.stop();
+        };
+
+        console.info("Barcode scanner: camera scanning");
       } catch (error) {
+        console.error("Barcode scanner: failed to start", error);
+
         setError(
           error instanceof Error
             ? error.message
@@ -95,16 +151,16 @@ export default function BarcodeScanner({
       }
     }
 
-    void startScanner();
+    const startTimer = window.setTimeout(() => {
+      void startScanner();
+    }, 0);
 
     return () => {
       stopped = true;
-      cleanupDetected?.();
-      void import("@ericblade/quagga2").then(({ default: Quagga }) => {
-        Quagga.stop();
-      });
+      window.clearTimeout(startTimer);
+      stopScanner?.();
     };
-  }, [onDetected]);
+  }, []);
 
   return (
     <section className="rounded-xl border border-primary/25 bg-primary/5 p-4">
