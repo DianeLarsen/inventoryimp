@@ -31,6 +31,9 @@ model InventoryItem {
   ingredients       Json?
   nutrition         Json?
   decrementStep     String?
+  quantityValue      Decimal? @db.Decimal(12, 3)
+  lowThresholdValue  Decimal? @db.Decimal(12, 3)
+  decrementStepValue Decimal? @db.Decimal(12, 3)
   expiresAt         DateTime? @db.Date
   addedAt           DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -49,11 +52,12 @@ model User {
 }
 
 model PurchaseHistory {
-  id        String   @id @default(cuid())
-  itemId    String
-  item      InventoryItem @relation(fields: [itemId], references: [id])
-  cost      Float
-  quantity  Float
+  id          String   @id @default(cuid())
+  itemId      String
+  item        InventoryItem @relation(fields: [itemId], references: [id])
+  cost        Float
+  costCents   Int?
+  quantity    Float
   purchasedAt DateTime @default(now())
 }
 

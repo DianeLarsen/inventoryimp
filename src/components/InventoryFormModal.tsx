@@ -183,24 +183,24 @@ export default function InventoryFormModal({
   const categoryOptions = commonCategories.map((c) => ({ value: c, label: c }));
 
   const Wrapper = isModal ? "div" : "section";
-  const wrapperProps = isModal
-    ? {
-        className:
-          "fixed inset-0 bg-background/70 backdrop-blur-md flex justify-center items-center z-50",
-      }
-    : {};
+ const wrapperProps = isModal
+   ? {
+       className:
+         "fixed inset-0 z-50 flex items-center justify-center bg-background/70 p-4 backdrop-blur-md",
+     }
+   : {};
 
   return (
     <Wrapper {...wrapperProps}>
       <div
-        className={`bg-[hsl(var(--modal)/0.9)] p-6 rounded-2xl shadow-lg w-full max-w-xl ${
+        className={`max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-y-auto rounded-2xl bg-[hsl(var(--modal)/0.9)] p-6 shadow-lg ${
           isModal ? "border border-border" : ""
         }`}
       >
         <h3 className="text-xl font-semibold mb-4">{title}</h3>
-        <form onSubmit={handleSubmit} className="grid gap-4">
+        <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
           {/* Name */}
-          <label className="block">
+          <label className="block sm:col-span-2">
             <span className="block mb-1 text-sm font-medium text-foreground">
               Name
             </span>
@@ -212,20 +212,6 @@ export default function InventoryFormModal({
                 isMissing("name") ? "border-red-500 ring-1 ring-red-300" : ""
               }`}
               placeholder="e.g. Apples"
-            />
-          </label>
-
-          {/* Brand */}
-          <label className="block">
-            <span className="block mb-1 text-sm font-medium text-foreground">
-              Brand
-            </span>
-            <input
-              name="brand"
-              value={form.brand ?? ""}
-              onChange={handleChange}
-              className="border p-2 rounded w-full"
-              placeholder="Optional brand"
             />
           </label>
 
@@ -250,24 +236,6 @@ export default function InventoryFormModal({
               }
               styles={customSelectStyles}
               isClearable
-            />
-          </label>
-
-          {/* Product Size */}
-          <label className="block">
-            <span className="block mb-1 text-sm font-medium text-foreground">
-              Product Size
-            </span>
-            <input
-              name="productSize"
-              value={form.productSize ?? ""}
-              onChange={handleChange}
-              className={`border p-2 rounded w-full ${
-                isMissing("productSize")
-                  ? "border-red-500 ring-1 ring-red-300"
-                  : ""
-              }`}
-              placeholder="e.g. 32oz box"
             />
           </label>
 
@@ -311,42 +279,6 @@ export default function InventoryFormModal({
             />
           </label>
 
-          {/* Decrement Step */}
-          <label className="block">
-            <span className="block mb-1 text-sm font-medium text-foreground">
-              Decrement Step
-            </span>
-            <TypedSelect
-              placeholder="How much to subtract when used"
-              options={[
-                { value: "1", label: "Whole (e.g. can, loaf)" },
-                { value: "0.25", label: "Quarter (e.g. bag of chips)" },
-                { value: "0.1", label: "Tenth (e.g. bottle of ketchup)" },
-              ]}
-              onChange={(selectedOption: SelectOption | null) =>
-                setForm((prev) => ({
-                  ...prev,
-                  decrementStep: selectedOption?.value || "",
-                }))
-              }
-              value={
-                form.decrementStep
-                  ? {
-                      value: form.decrementStep,
-                      label:
-                        form.decrementStep === "1"
-                          ? "Whole (e.g. can, loaf)"
-                          : form.decrementStep === "0.25"
-                            ? "Quarter (e.g. bag of chips)"
-                            : "Tenth (e.g. bottle of ketchup)",
-                    }
-                  : null
-              }
-              styles={customSelectStyles}
-              isClearable
-            />
-          </label>
-
           {/* Location */}
           <label className="block">
             <span className="block mb-1 text-sm font-medium text-foreground">
@@ -370,40 +302,110 @@ export default function InventoryFormModal({
               isClearable
             />
           </label>
-          <label className="grid gap-1 text-sm">
-            <span className="font-medium">Best by / expires on</span>
-            <input
-              type="date"
-              value={form.expiresAt ? form.expiresAt.slice(0, 10) : ""}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  expiresAt: event.target.value || undefined,
-                }))
-              }
-              className="rounded-md border bg-background px-3 py-2"
-            />
-            <span className="text-xs text-muted-foreground">
-              Optional. Leave blank when there is no useful date to track.
-            </span>
-          </label>
+          <details className="rounded-lg border border-border p-4 sm:col-span-2">
+            <summary className="cursor-pointer text-sm font-medium text-muted-foreground">
+              More details
+            </summary>
 
-          {/* Notes */}
-          <label className="block">
-            <span className="block mb-1 text-sm font-medium text-foreground">
-              Notes
-            </span>
-            <textarea
-              name="notes"
-              value={form.notes ?? ""}
-              onChange={handleChange}
-              className="border p-2 rounded w-full"
-              placeholder="e.g. For smoothies, preferred brand, etc."
-            />
-          </label>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              {/* Brand */}
+              <label className="block">
+                <span className="block mb-1 text-sm font-medium text-foreground">
+                  Brand
+                </span>
+                <input
+                  name="brand"
+                  value={form.brand ?? ""}
+                  onChange={handleChange}
+                  className="border p-2 rounded w-full"
+                  placeholder="Optional brand"
+                />
+              </label>
+              {/* Product Size */}
+              <label className="block">
+                <span className="block mb-1 text-sm font-medium text-foreground">
+                  Product Size
+                </span>
+                <input
+                  name="productSize"
+                  value={form.productSize ?? ""}
+                  onChange={handleChange}
+                  className="w-full rounded border p-2"
+                  placeholder="e.g. 32oz box"
+                />
+              </label>
+              {/* Decrement Step */}
+              <label className="block">
+                <span className="block mb-1 text-sm font-medium text-foreground">
+                  Decrement Step
+                </span>
+                <TypedSelect
+                  placeholder="How much to subtract when used"
+                  options={[
+                    { value: "1", label: "Whole (e.g. can, loaf)" },
+                    { value: "0.25", label: "Quarter (e.g. bag of chips)" },
+                    { value: "0.1", label: "Tenth (e.g. bottle of ketchup)" },
+                  ]}
+                  onChange={(selectedOption: SelectOption | null) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      decrementStep: selectedOption?.value || "",
+                    }))
+                  }
+                  value={
+                    form.decrementStep
+                      ? {
+                          value: form.decrementStep,
+                          label:
+                            form.decrementStep === "1"
+                              ? "Whole (e.g. can, loaf)"
+                              : form.decrementStep === "0.25"
+                                ? "Quarter (e.g. bag of chips)"
+                                : "Tenth (e.g. bottle of ketchup)",
+                        }
+                      : null
+                  }
+                  styles={customSelectStyles}
+                  isClearable
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium">
+                  Best by / expires{" "}
+                  <span className="text-muted-foreground">(optional)</span>
+                </span>
+                <input
+                  type="date"
+                  value={form.expiresAt ? form.expiresAt.slice(0, 10) : ""}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      expiresAt: event.target.value || undefined,
+                    }))
+                  }
+                  className="rounded-md border bg-background px-3 py-2"
+                />
+
+              </label>
+
+              {/* Notes */}
+              <label className="block sm:col-span-2">
+                <span className="block mb-1 text-sm font-medium text-foreground">
+                  Notes
+                </span>
+                <textarea
+                  name="notes"
+                  value={form.notes ?? ""}
+                  onChange={handleChange}
+                  className="border p-2 rounded w-full"
+                  placeholder="e.g. For smoothies, preferred brand, etc."
+                />
+              </label>
+            </div>
+          </details>
 
           {/* Buttons */}
-          <div className="flex justify-end gap-2 mt-4">
+          <div className="mt-4 flex justify-end gap-2 sm:col-span-2">
             {isModal && (
               <button type="button" onClick={onClose} className="btn-secondary">
                 Cancel
