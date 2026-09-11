@@ -279,13 +279,24 @@ function normalize(str: string) {
     .replace(/[^a-z0-9]/g, "");
 }
 
+// UPC-A and its EAN-13 equivalent are the same barcode with a leading zero
+// prepended, and lookups can return either form depending on the source -
+// so comparing raw strings misses real matches (e.g. "043000011201" vs
+// "0043000011201"). Stripping leading zeros makes those equal without
+// needing to know which form either side happens to be in.
+export function normalizeBarcode(value: string | null | undefined): string {
+  return (value || "").toString().trim().replace(/^0+/, "");
+}
+
 export function findMatchingInventoryItem(
   incoming: ManualInventoryInput,
   inventory: InventoryItem[],
 ): { match?: InventoryItem; reason?: string } {
   if (incoming.upc) {
     const match = inventory.find(
-      (item) => item.upc?.toString().trim() === incoming.upc?.toString().trim(),
+      (item) =>
+        item.upc &&
+        normalizeBarcode(item.upc) === normalizeBarcode(incoming.upc),
     );
     if (match) return { match };
   }
@@ -365,8 +376,17 @@ export function findSimilarProduct(
 const DUPLICATE_MATCH_THRESHOLD = PRODUCT_MATCH_THRESHOLD;
 
 // Pairwise scan for products that were created separately but are probably
-// the same thing under different brands or listings - the retroactive
-// counterpart to findSimilarProduct, which only catches this going forward.
+// the same thing - the retroactive counterpart to findSimilarProduct, which
+// only catches this going forward. Two kinds of match, in priority order:
+//
+// - "upc": the products share a barcode. This is the exact same item
+//   entered twice (often with inconsistent info the second time, which is
+//   exactly why it wasn't caught as a duplicate when it was added) - about
+//   as certain as this gets, so it's checked first and short-circuits the
+//   weaker name check below for that pair.
+// - "name": the names are merely similar - probably the same product under
+//   different brands (e.g. store-brand vs name-brand chicken noodle soup),
+//   which is more of a judgment call than a certainty.
 export function findDuplicateProductPairs(
   products: Product[],
 ): DuplicateCandidate[] {
@@ -374,19 +394,33 @@ export function findDuplicateProductPairs(
 
   for (let i = 0; i < products.length; i++) {
     for (let j = i + 1; j < products.length; j++) {
-      const score = nameSimilarity(products[i].name, products[j].name);
+      const productA = products[i];
+      const productB = products[j];
+
+      const sharesUpc = productA.upcs.some((upc) =>
+        productB.upcs.includes(upc),
+      );
+
+      if (sharesUpc) {
+        candidates.push({ productA, productB, score: 1, matchType: "upc" });
+        continue;
+      }
+
+      const score = nameSimilarity(productA.name, productB.name);
 
       if (score >= DUPLICATE_MATCH_THRESHOLD) {
-        candidates.push({
-          productA: products[i],
-          productB: products[j],
-          score,
-        });
+        candidates.push({ productA, productB, score, matchType: "name" });
       }
     }
   }
 
-  return candidates.sort((a, b) => b.score - a.score);
+  return candidates.sort((a, b) => {
+    if (a.matchType !== b.matchType) {
+      return a.matchType === "upc" ? -1 : 1;
+    }
+
+    return b.score - a.score;
+  });
 }
 
 export function isProductSizeCompatible(

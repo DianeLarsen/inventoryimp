@@ -29,11 +29,12 @@ export default async function DuplicateProductsPage() {
           Check for duplicate products
         </h1>
         <p className="mt-2 text-muted-foreground">
-          These look like they might be the same product listed separately -
-          often the same thing under a different brand. Review each pair and
-          merge the ones that match, or dismiss the ones that don&apos;t.
-          Merging keeps every brand&apos;s own stock and purchase history;
-          it just groups them under one product.
+          Two ways an item can end up listed twice: the exact same product
+          entered a second time (usually with less info than the first, since
+          nothing caught the match), or a different brand of the same kind of
+          product that&apos;s worth grouping together. Both are shown below,
+          most certain first. Merging keeps every brand&apos;s own stock and
+          purchase history; it just groups them under one product.
         </p>
       </div>
 
