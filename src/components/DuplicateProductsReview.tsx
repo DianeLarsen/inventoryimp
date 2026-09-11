@@ -2,10 +2,20 @@
 
 import { useState } from "react";
 import { mergeProducts } from "@/lib/actions/mergeProducts";
-import type { DuplicateCandidate } from "@/types";
+import { getProductItems } from "@/lib/actions/getProductItems";
+import MergeReviewModal from "./MergeReviewModal";
+import type { DuplicateCandidate, InventoryItem } from "@/types";
 
 const keyOf = (candidate: DuplicateCandidate) =>
   `${candidate.productA.id}:${candidate.productB.id}`;
+
+// The review window needs one specific InventoryItem from each side to
+// compare field-by-field, so it only applies when each product is a single
+// item. A product that's already grouping more than one brand needs a
+// richer N-item reconciliation UI this doesn't attempt yet - those fall
+// back to the plain "keep this whole product" choice.
+const isEligibleForReview = (candidate: DuplicateCandidate) =>
+  candidate.productA.itemCount === 1 && candidate.productB.itemCount === 1;
 
 export default function DuplicateProductsReview({
   initialCandidates,
@@ -15,6 +25,12 @@ export default function DuplicateProductsReview({
   const [candidates, setCandidates] = useState(initialCandidates);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mergeReview, setMergeReview] = useState<{
+    key: string;
+    candidate: DuplicateCandidate;
+    itemA: InventoryItem;
+    itemB: InventoryItem;
+  } | null>(null);
 
   const dismiss = (candidate: DuplicateCandidate) => {
     setCandidates((previous) =>
@@ -45,6 +61,31 @@ export default function DuplicateProductsReview({
     }
   };
 
+  const openMergeReview = async (candidate: DuplicateCandidate) => {
+    const key = keyOf(candidate);
+    setPendingKey(key);
+    setError(null);
+
+    try {
+      const [itemsA, itemsB] = await Promise.all([
+        getProductItems(candidate.productA.id),
+        getProductItems(candidate.productB.id),
+      ]);
+
+      if (!itemsA[0] || !itemsB[0]) {
+        throw new Error("Could not load those items.");
+      }
+
+      setMergeReview({ key, candidate, itemA: itemsA[0], itemB: itemsB[0] });
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not load those items.",
+      );
+    } finally {
+      setPendingKey(null);
+    }
+  };
+
   if (candidates.length === 0) {
     return (
       <div className="rounded-xl border border-dashed p-8 text-center">
@@ -63,6 +104,7 @@ export default function DuplicateProductsReview({
     const key = keyOf(candidate);
     const isPending = pendingKey === key;
     const products = [candidate.productA, candidate.productB] as const;
+    const eligible = isEligibleForReview(candidate);
 
     return (
       <div key={key} className="rounded-xl border bg-card p-4">
@@ -76,17 +118,31 @@ export default function DuplicateProductsReview({
                   : "No brand"}{" "}
                 · {product.itemCount} {product.itemCount === 1 ? "item" : "items"}
               </p>
-              <button
-                type="button"
-                onClick={() => merge(candidate, index === 0 ? "A" : "B")}
-                disabled={isPending}
-                className="mt-3 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
-              >
-                {isPending ? "Merging..." : "Keep this one"}
-              </button>
+
+              {!eligible && (
+                <button
+                  type="button"
+                  onClick={() => merge(candidate, index === 0 ? "A" : "B")}
+                  disabled={isPending}
+                  className="mt-3 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+                >
+                  {isPending ? "Merging..." : "Keep this one"}
+                </button>
+              )}
             </div>
           ))}
         </div>
+
+        {eligible && (
+          <button
+            type="button"
+            onClick={() => openMergeReview(candidate)}
+            disabled={isPending}
+            className="mt-3 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+          >
+            {isPending ? "Loading..." : "Review & merge"}
+          </button>
+        )}
 
         <div className="mt-3 flex items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">
@@ -141,6 +197,25 @@ export default function DuplicateProductsReview({
           </div>
           <div className="space-y-4">{nameMatches.map(renderCard)}</div>
         </section>
+      )}
+
+      {mergeReview && (
+        <MergeReviewModal
+          productA={mergeReview.candidate.productA}
+          productB={mergeReview.candidate.productB}
+          itemA={mergeReview.itemA}
+          itemB={mergeReview.itemB}
+          defaultMode={
+            mergeReview.candidate.matchType === "upc" ? "consolidate" : "keep-both"
+          }
+          onClose={() => setMergeReview(null)}
+          onMerged={() => {
+            setCandidates((previous) =>
+              previous.filter((entry) => keyOf(entry) !== mergeReview.key),
+            );
+            setMergeReview(null);
+          }}
+        />
       )}
     </div>
   );

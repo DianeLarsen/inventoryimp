@@ -4,12 +4,22 @@ import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
 import { requireCurrentUserId } from "@/lib/current-user";
 
+export type ProductFieldOverrides = {
+  name?: string;
+  category?: string | null;
+  unit?: string | null;
+};
+
 // Moves every InventoryItem off mergeProductId and onto keepProductId, then
 // removes the now-empty product. Each brand's own InventoryItem row (stock,
 // purchase history) is untouched - only which Product it belongs to changes.
+// An optional overrides object applies the caller's chosen name/category/
+// unit to the surviving product, instead of leaving it as keepProduct's own
+// (unedited) values.
 export async function mergeProducts(
   keepProductId: string,
   mergeProductId: string,
+  overrides?: ProductFieldOverrides,
 ): Promise<{ success: boolean; message?: string }> {
   const userId = await requireCurrentUserId();
   if (!userId) throw new Error("Not authenticated");
@@ -35,6 +45,13 @@ export async function mergeProducts(
       });
 
       await tx.product.delete({ where: { id: mergeProductId } });
+
+      if (overrides) {
+        await tx.product.update({
+          where: { id: keepProductId },
+          data: overrides,
+        });
+      }
     });
 
     revalidatePath("/inventory");
