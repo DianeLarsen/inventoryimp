@@ -39,9 +39,32 @@ model InventoryItem {
   updatedAt          DateTime           @updatedAt
   userId             String
   user               User               @relation(fields: [userId], references: [id])
+  productId          String
+  product            Product            @relation(fields: [productId], references: [id])
   purchaseHistory    PurchaseHistory[]
   recipeIngredients  RecipeIngredient[]
   groceryListItems   GroceryListItem[]
+
+  @@index([productId])
+}
+
+// A product groups multiple brand-specific InventoryItem rows together
+// (e.g. "Chicken Noodle Soup" grouping a Great Value can and a Campbell's can)
+// so they can be shown and shopped for as one thing, while each brand's own
+// stock and purchase history stays on its own InventoryItem row.
+model Product {
+  id        String          @id @default(cuid())
+  userId    String
+  user      User            @relation(fields: [userId], references: [id])
+  name      String
+  category  String?
+  unit      String?
+  items     InventoryItem[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([userId])
+  @@index([userId, name])
 }
 
 model User {
@@ -51,6 +74,7 @@ model User {
   recipes        Recipe[]
   mealPlans      MealPlan[]
   groceryLists   GroceryList[]
+  products       Product[]
 }
 
 model PurchaseHistory {
