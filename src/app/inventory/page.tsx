@@ -1,10 +1,13 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import { Layers } from "lucide-react";
 import DeleteInventoryButton from "@/components/DeleteInventoryButton";
 import InventoryIntake from "@/components/InventoryIntake";
 import InventoryList from "@/components/InventoryList";
 import { getInventory } from "@/lib/actions/getInventory";
 import { getProducts } from "@/lib/actions/getProducts";
+import { findDuplicateProductPairs } from "@/lib/utils";
 
 export default async function InventoryPage() {
   const { userId, has } = await auth();
@@ -14,6 +17,7 @@ export default async function InventoryPage() {
   }
 
   const [items, products] = await Promise.all([getInventory(), getProducts()]);
+  const duplicateCount = findDuplicateProductPairs(products).length;
   const hasHome = has({ feature: "ai_receipt_parsing" });
   return (
     <main className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6">
@@ -47,9 +51,21 @@ export default async function InventoryPage() {
       <InventoryIntake initialInventory={items} initialProducts={products} />
 
       <section className="rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
-        <div className="mb-6">
-          <p className="text-sm font-medium text-primary">Your pantry</p>
-          <h2 className="mt-1 text-2xl font-semibold">Current inventory</h2>
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-primary">Your pantry</p>
+            <h2 className="mt-1 text-2xl font-semibold">Current inventory</h2>
+          </div>
+
+          {duplicateCount > 0 && (
+            <Link
+              href="/inventory/duplicates"
+              className="inline-flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm font-medium hover:bg-primary/10"
+            >
+              <Layers className="size-4" />
+              {duplicateCount} possible {duplicateCount === 1 ? "duplicate" : "duplicates"}
+            </Link>
+          )}
         </div>
 
         <InventoryList initialItems={items} />

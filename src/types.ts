@@ -72,6 +72,14 @@ export type ManualInventoryInput = {
   productId?: string;
 };
 
+// A possible duplicate pair surfaced by the duplicate-products scan.
+// Never applied automatically - the user picks which product to keep.
+export type DuplicateCandidate = {
+  productA: Product;
+  productB: Product;
+  score: number;
+};
+
 export type SelectOption = { value: string; label: string };
 
 export type ParsedReceiptItem = {

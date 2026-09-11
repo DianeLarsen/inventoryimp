@@ -3,6 +3,7 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import type {
+  DuplicateCandidate,
   InventoryItem,
   ManualInventoryInput,
   ParsedReceiptItem,
@@ -356,6 +357,36 @@ export function findSimilarProduct(
   }
 
   return best && best.score >= PRODUCT_MATCH_THRESHOLD ? best.product : undefined;
+}
+
+// Same bar used for the add-time merge suggestion, so "possible duplicate"
+// means the same thing whether it's caught as you scan or found later on
+// the duplicate-products scan.
+const DUPLICATE_MATCH_THRESHOLD = PRODUCT_MATCH_THRESHOLD;
+
+// Pairwise scan for products that were created separately but are probably
+// the same thing under different brands or listings - the retroactive
+// counterpart to findSimilarProduct, which only catches this going forward.
+export function findDuplicateProductPairs(
+  products: Product[],
+): DuplicateCandidate[] {
+  const candidates: DuplicateCandidate[] = [];
+
+  for (let i = 0; i < products.length; i++) {
+    for (let j = i + 1; j < products.length; j++) {
+      const score = nameSimilarity(products[i].name, products[j].name);
+
+      if (score >= DUPLICATE_MATCH_THRESHOLD) {
+        candidates.push({
+          productA: products[i],
+          productB: products[j],
+          score,
+        });
+      }
+    }
+  }
+
+  return candidates.sort((a, b) => b.score - a.score);
 }
 
 export function isProductSizeCompatible(
