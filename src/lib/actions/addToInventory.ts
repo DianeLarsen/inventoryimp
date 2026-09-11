@@ -62,42 +62,74 @@ const quantity = quantityValue ? Number(quantityValue) : Number.NaN;
  const shouldRecordPurchase =
    costCents !== null && Number.isFinite(quantity) && quantity > 0;
 
-  await prisma.inventoryItem.create({
-    data: {
-      userId,
-      upc: item.upc || null,
-      name: item.name,
-      category: item.category || null,
-      brand: item.brand || null,
-      productSize: item.productSize || null,
-      quantityAvailable: item.quantityAvailable || null,
-      quantityValue,
-      unit:
-        item.unit?.trim() && item.unit.trim().toLowerCase() !== "null"
-          ? item.unit.trim()
+  const unit =
+    item.unit?.trim() && item.unit.trim().toLowerCase() !== "null"
+      ? item.unit.trim()
+      : null;
+
+  await prisma.$transaction(async (tx) => {
+    // Link to an existing Product only after the user has confirmed it (via
+    // productId); otherwise this item gets its own new Product, named after
+    // itself, same as every other product-grouping entry point.
+    let productId = item.productId;
+
+    if (productId) {
+      const product = await tx.product.findFirst({
+        where: { id: productId, userId },
+      });
+
+      if (!product) {
+        throw new Error("That product could not be found.");
+      }
+    } else {
+      const product = await tx.product.create({
+        data: {
+          userId,
+          name: item.name,
+          category: item.category || null,
+          unit,
+        },
+      });
+
+      productId = product.id;
+    }
+
+    await tx.inventoryItem.create({
+      data: {
+        userId,
+        productId,
+        upc: item.upc || null,
+        name: item.name,
+        category: item.category || null,
+        brand: item.brand || null,
+        productSize: item.productSize || null,
+        quantityAvailable: item.quantityAvailable || null,
+        quantityValue,
+        unit,
+        location: item.location || null,
+        expiresAt: item.expiresAt
+          ? new Date(`${item.expiresAt}T12:00:00.000Z`)
           : null,
-      location: item.location || null,
-      expiresAt: item.expiresAt
-        ? new Date(`${item.expiresAt}T12:00:00.000Z`)
-        : null,
-      notes: item.notes || null,
-      lowThreshold: item.lowThreshold || null,
-      lowThresholdValue,
-      imageUrl: item.imageUrl || null,
-      decrementStep: item.decrementStep || null,
-      decrementStepValue,
-      purchaseHistory: shouldRecordPurchase
-        ? {
-            create: {
-              cost,
-              costCents,
-              quantity,
-            },
-          }
-        : undefined,
-      nutrition: Prisma.JsonNull,
-      ingredients: Prisma.JsonNull,
-    },
+        notes: item.notes || null,
+        lowThreshold: item.lowThreshold || null,
+        lowThresholdValue,
+        imageUrl: item.imageUrl || null,
+        decrementStep: item.decrementStep || null,
+        decrementStepValue,
+        purchaseHistory: shouldRecordPurchase
+          ? {
+              create: {
+                cost,
+                costCents,
+                quantity,
+              },
+            }
+          : undefined,
+        nutrition: Prisma.JsonNull,
+        ingredients: Prisma.JsonNull,
+      },
+    });
   });
+
   revalidatePath("/inventory");
 }

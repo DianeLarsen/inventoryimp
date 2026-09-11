@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { addToInventory } from "@/lib/actions/addToInventory";
-import type { InventoryItem, ManualInventoryInput } from "@/types";
+import type { InventoryItem, ManualInventoryInput, Product } from "@/types";
 import {
   findMatchingInventoryItem,
+  findSimilarProduct,
   isProductSizeCompatible,
 } from "@/lib/utils";
+import ProductMatchPrompt from "./ProductMatchPrompt";
 import { parseInventoryDraftAction } from "@/lib/actions/parseInventoryDraftAction";
 import { updateInventoryQuantity } from "@/lib/actions/updateInventoryQuantity";
 import Link from "next/link";
@@ -24,15 +26,18 @@ type ParsedItemWithAction = {
   selected: boolean;
   match?: InventoryItem;
   conflict?: string;
+  similarProduct?: Product;
 };
 
 type ReceiptMode = "photo" | "text" | "import";
 
 export default function ReceiptParser({
   initialInventory,
+  products = [],
   mode,
 }: {
   initialInventory: InventoryItem[];
+  products?: Product[];
   mode: ReceiptMode;
 }) {
   const [text, setText] = useState("");
@@ -74,11 +79,18 @@ export default function ReceiptParser({
           ? "Product size mismatch"
           : undefined;
 
+      // Only worth suggesting a product link for items that aren't already
+      // an exact match on an existing inventory item.
+      const similarProduct = match
+        ? undefined
+        : findSimilarProduct(item.name, item.category, products);
+
       return {
         item,
         selected: !match && !conflict,
         match,
         conflict,
+        similarProduct,
       };
     });
 
@@ -516,6 +528,40 @@ export default function ReceiptParser({
                         this item to add it separately.
                       </>
                     )}
+                  </div>
+                )}
+
+                {entry.similarProduct && (
+                  <div className="mt-2">
+                    <ProductMatchPrompt
+                      itemName={entry.item.name}
+                      candidate={entry.similarProduct}
+                      onConfirm={() =>
+                        setParsedItems((previous) =>
+                          previous.map((parsedItem, index) =>
+                            index === i
+                              ? {
+                                  ...parsedItem,
+                                  item: {
+                                    ...parsedItem.item,
+                                    productId: entry.similarProduct!.id,
+                                  },
+                                  similarProduct: undefined,
+                                }
+                              : parsedItem,
+                          ),
+                        )
+                      }
+                      onDismiss={() =>
+                        setParsedItems((previous) =>
+                          previous.map((parsedItem, index) =>
+                            index === i
+                              ? { ...parsedItem, similarProduct: undefined }
+                              : parsedItem,
+                          ),
+                        )
+                      }
+                    />
                   </div>
                 )}
                 <div className="flex gap-2 mt-1">

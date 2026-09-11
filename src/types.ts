@@ -22,6 +22,21 @@ export type InventoryItem = {
   quantityValue?: string | null;
   lowThresholdValue?: string | null;
   decrementStepValue?: string | null;
+  productId?: string;
+  productName?: string;
+};
+
+// A Product groups multiple brand-specific InventoryItem rows together
+// (e.g. Great Value and Campbell's chicken noodle soup, both "Chicken
+// Noodle Soup") so they can be shown as one thing while each brand keeps
+// its own stock and purchase history.
+export type Product = {
+  id: string;
+  name: string;
+  category?: string | null;
+  unit?: string | null;
+  brands: string[]; // distinct, non-empty brands already stocked under this product
+  itemCount: number;
 };
 
 export type ProductResult = {
@@ -51,6 +66,10 @@ export type ManualInventoryInput = {
   imageUrl?: string;
   decrementStep: string;
   cost?: string;
+  // Set when the user confirmed this item belongs to an existing Product
+  // (e.g. linking a new brand to an already-tracked product). Left unset
+  // to create a new Product named after this item.
+  productId?: string;
 };
 
 export type SelectOption = { value: string; label: string };

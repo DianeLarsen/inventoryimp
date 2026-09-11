@@ -10,17 +10,24 @@ import type {
   ProductResult,
   InventoryItem,
   ManualInventoryInput,
+  Product,
 } from "@/types";
 import TypedSelect, { SelectOption } from "@/components/TypedSelect";
 import InventoryList from "./InventoryList";
 import InventoryFormModal from "./InventoryFormModal";
+import ProductMatchPrompt from "./ProductMatchPrompt";
 import {
+  findSimilarProduct,
   guessDecrementStep,
   hasMissingFields,
   normalizeToManualInput,
 } from "@/lib/utils";
 
-export default function ProductSearch() {
+export default function ProductSearch({
+  products = [],
+}: {
+  products?: Product[];
+}) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ProductResult[] | null>(null);
   const [availableBrands, setAvailableBrands] = useState<
@@ -42,6 +49,36 @@ export default function ProductSearch() {
   );
   const [hasSearched, setHasSearched] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [matchPrompt, setMatchPrompt] = useState<{
+    item: ManualInventoryInput;
+    candidate: Product;
+    addedKey: string;
+  } | null>(null);
+
+  const submitItem = async (item: ManualInventoryInput, addedKey: string) => {
+    try {
+      await addToInventory(item);
+      setAddedItems((prev) => new Set(prev).add(addedKey));
+    } catch (err) {
+      console.error("❌ Failed to add to inventory:", err);
+    } finally {
+      setMatchPrompt(null);
+    }
+  };
+
+  const addWithMatchCheck = async (
+    item: ManualInventoryInput,
+    addedKey: string,
+  ) => {
+    const candidate = findSimilarProduct(item.name, item.category, products);
+
+    if (candidate) {
+      setMatchPrompt({ item, candidate, addedKey });
+      return;
+    }
+
+    await submitItem(item, addedKey);
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -132,12 +169,7 @@ export default function ProductSearch() {
       setModalItem(enrichedItem); // pre-fill form
       setShowManualForm(true);
     } else {
-      try {
-        await addToInventory(enrichedItem);
-        setAddedItems((prev) => new Set(prev).add(item.upc || item.name));
-      } catch (err) {
-        console.error("❌ Failed to add to inventory:", err);
-      }
+      await addWithMatchCheck(enrichedItem, item.upc || item.name);
     }
   };
 
@@ -440,7 +472,7 @@ export default function ProductSearch() {
           </div>
         </section>
       )}
-      {showManualForm && modalItem && (
+      {showManualForm && modalItem && !matchPrompt && (
         <InventoryFormModal
           initialItem={modalItem}
           onSave={async (data) => {
@@ -451,17 +483,31 @@ export default function ProductSearch() {
 
             const cleaned = normalizeToManualInput(data);
 
-            await addToInventory(cleaned);
-
-            setAddedItems((prev) =>
-              new Set(prev).add(cleaned.upc || cleaned.name || ""),
-            );
+            await addWithMatchCheck(cleaned, cleaned.upc || cleaned.name || "");
             setShowManualForm(false);
           }}
           onClose={() => setShowManualForm(false)}
           title="📝 Complete Item Details"
           isSaving={false}
         />
+      )}
+
+      {matchPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 p-4 backdrop-blur-md">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-[hsl(var(--modal)/0.9)] p-5 shadow-lg">
+            <ProductMatchPrompt
+              itemName={matchPrompt.item.name}
+              candidate={matchPrompt.candidate}
+              onConfirm={() =>
+                submitItem(
+                  { ...matchPrompt.item, productId: matchPrompt.candidate.id },
+                  matchPrompt.addedKey,
+                )
+              }
+              onDismiss={() => submitItem(matchPrompt.item, matchPrompt.addedKey)}
+            />
+          </div>
+        </div>
       )}
 
       {/* ❌ No Results Found */}
