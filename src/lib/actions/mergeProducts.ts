@@ -11,6 +11,7 @@ export type ProductFieldOverrides = {
 };
 
 export type ItemFieldOverrides = {
+  upc?: string | null;
   brand?: string | null;
   productSize?: string | null;
   quantityAvailable?: string | null;

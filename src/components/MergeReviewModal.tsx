@@ -38,6 +38,7 @@ const CONSOLIDATE_FIELDS: {
 // choose between. name/category/unit are shared either way, at the product
 // level (see PRODUCT_FIELDS).
 const ITEM_FIELDS: { key: keyof MergedItemFields; label: string }[] = [
+  { key: "upc", label: "UPC" },
   { key: "brand", label: "Brand" },
   { key: "productSize", label: "Product size" },
   { key: "quantityAvailable", label: "Quantity available" },
@@ -170,6 +171,7 @@ export default function MergeReviewModal({
   const itemOverridesFrom = (
     edits: Record<string, string>,
   ): Required<ItemFieldOverrides> => ({
+    upc: edits.upc.trim() || null,
     brand: edits.brand.trim() || null,
     productSize: edits.productSize.trim() || null,
     quantityAvailable: edits.quantityAvailable.trim() || null,
