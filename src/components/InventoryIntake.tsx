@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { Lock } from "lucide-react";
-import type { InventoryItem } from "@/types";
+import type { InventoryItem, Product } from "@/types";
 import ManualAddForm from "./ManualAddForm";
 import ProductSearch from "./ProductSearch";
 import ReceiptParser from "./ReceiptParser";
@@ -38,8 +38,10 @@ const intakeOptions: {
 
 export default function InventoryIntake({
   initialInventory,
+  initialProducts = [],
 }: {
   initialInventory: InventoryItem[];
+  initialProducts?: Product[];
 }) {
   const intakeRef = useRef<HTMLDetailsElement>(null);
   const searchParams = useSearchParams();
@@ -204,16 +206,17 @@ export default function InventoryIntake({
 
             <ReceiptParser
               initialInventory={initialInventory}
+              products={initialProducts}
               mode={receiptMode}
             />
           </div>
 
           <div hidden={activeMode !== "search"}>
-            <ProductSearch />
+            <ProductSearch products={initialProducts} />
           </div>
 
           <div hidden={activeMode !== "manual"}>
-            <ManualAddForm />
+            <ManualAddForm products={initialProducts} />
           </div>
         </div>
       </div>

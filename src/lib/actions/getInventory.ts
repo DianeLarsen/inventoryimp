@@ -10,10 +10,14 @@ export async function getInventory() {
   const inventory = await prisma.inventoryItem.findMany({
     where: { userId },
     orderBy: { name: "asc" },
+    include: {
+      product: { select: { name: true } },
+    },
   });
 
-  return inventory.map((item) => ({
+  return inventory.map(({ product, ...item }) => ({
     ...item,
+    productName: product.name,
     quantityValue: item.quantityValue?.toString() ?? null,
     lowThresholdValue: item.lowThresholdValue?.toString() ?? null,
     decrementStepValue: item.decrementStepValue?.toString() ?? null,

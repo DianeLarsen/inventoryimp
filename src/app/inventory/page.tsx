@@ -4,6 +4,7 @@ import DeleteInventoryButton from "@/components/DeleteInventoryButton";
 import InventoryIntake from "@/components/InventoryIntake";
 import InventoryList from "@/components/InventoryList";
 import { getInventory } from "@/lib/actions/getInventory";
+import { getProducts } from "@/lib/actions/getProducts";
 
 export default async function InventoryPage() {
   const { userId, has } = await auth();
@@ -12,7 +13,7 @@ export default async function InventoryPage() {
     redirect("/");
   }
 
-  const items = await getInventory();
+  const [items, products] = await Promise.all([getInventory(), getProducts()]);
   const hasHome = has({ feature: "ai_receipt_parsing" });
   return (
     <main className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6">
@@ -43,7 +44,7 @@ export default async function InventoryPage() {
         </div>
       </header>
 
-      <InventoryIntake initialInventory={items} />
+      <InventoryIntake initialInventory={items} initialProducts={products} />
 
       <section className="rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
         <div className="mb-6">

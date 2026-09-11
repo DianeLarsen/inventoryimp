@@ -6,6 +6,7 @@ import type {
   InventoryItem,
   ManualInventoryInput,
   ParsedReceiptItem,
+  Product,
 } from "@/types";
 import { deleteAllInventory } from "./actions/deleteAllInventory";
 
@@ -295,6 +296,66 @@ export function findMatchingInventoryItem(
   if (matchByName) return { match: matchByName };
 
   return {};
+}
+
+function normalizeWords(str: string): string[] {
+  return str
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+// Word-overlap (Jaccard) similarity, 0-1. Deliberately simple and
+// dependency-free: it's meant to *suggest* a possible match for a human to
+// confirm, never to merge products on its own. This is why two items whose
+// name differs only by brand ("Great Value Chicken Noodle Soup" vs
+// "Campbell's Chicken Noodle Soup") still score highly - the shared words
+// ("chicken", "noodle", "soup") dominate even though the brand words don't
+// match at all.
+export function nameSimilarity(a: string, b: string): number {
+  const tokensA = new Set(normalizeWords(a));
+  const tokensB = new Set(normalizeWords(b));
+
+  if (tokensA.size === 0 || tokensB.size === 0) return 0;
+
+  let intersection = 0;
+  for (const token of tokensA) {
+    if (tokensB.has(token)) intersection++;
+  }
+
+  const union = tokensA.size + tokensB.size - intersection;
+
+  return union === 0 ? 0 : intersection / union;
+}
+
+const PRODUCT_MATCH_THRESHOLD = 0.5;
+
+// Suggests an existing Product this new item might belong to, based on
+// name (and a small boost for a matching category). Always a suggestion
+// for the user to confirm or dismiss - never applied automatically.
+export function findSimilarProduct(
+  name: string,
+  category: string | null | undefined,
+  products: Product[],
+): Product | undefined {
+  let best: { product: Product; score: number } | undefined;
+
+  for (const product of products) {
+    let score = nameSimilarity(name, product.name);
+
+    if (category && product.category && normalize(category) === normalize(product.category)) {
+      score += 0.1;
+    }
+
+    if (!best || score > best.score) {
+      best = { product, score };
+    }
+  }
+
+  return best && best.score >= PRODUCT_MATCH_THRESHOLD ? best.product : undefined;
 }
 
 export function isProductSizeCompatible(

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import type { InventoryItem } from "@/types";
 import EditInventoryModal from "./EditInventoryModal";
 import {
@@ -18,6 +19,12 @@ type InventoryView =
   | "missing-expiration";
 
 type SortOption = "updated" | "added" | "name" | "quantity-low";
+
+type ProductGroup = {
+  productId: string;
+  productName: string;
+  items: InventoryItem[];
+};
 
 const viewOptions: { id: InventoryView; label: string }[] = [
   { id: "all", label: "All items" },
@@ -68,6 +75,68 @@ function getExpirationLabel(item: InventoryItem) {
   return `Expires ${getDateOnly(item.expiresAt)?.toLocaleDateString()}`;
 }
 
+function isLowStock(item: InventoryItem) {
+  const quantity = Number.parseFloat(item.quantityAvailable || "");
+  const threshold = Number.parseFloat(item.lowThreshold || "");
+
+  return (
+    Number.isFinite(quantity) &&
+    Number.isFinite(threshold) &&
+    quantity <= threshold
+  );
+}
+
+function isExpired(item: InventoryItem) {
+  const days = daysUntilExpiration(item.expiresAt);
+  return days !== null && days < 0;
+}
+
+function isExpiringSoon(item: InventoryItem) {
+  const days = daysUntilExpiration(item.expiresAt);
+  return days !== null && days >= 0 && days <= 7;
+}
+
+function needsAttention(item: InventoryItem) {
+  return isLowStock(item) || isExpired(item) || isExpiringSoon(item);
+}
+
+// Only safe to add quantities together when every brand in the group is
+// tracked in the same unit - "2 cans + 1 bottle" isn't a number.
+function commonUnit(items: InventoryItem[]): string | null {
+  const units = items.map((item) => item.unit?.trim().toLowerCase() || null);
+
+  if (units.some((unit) => !unit)) return null;
+  if (new Set(units).size > 1) return null;
+
+  return items[0].unit || null;
+}
+
+function sumField(
+  items: InventoryItem[],
+  field: "quantityAvailable" | "lowThreshold",
+) {
+  return items.reduce(
+    (total, item) => total + (Number.parseFloat(item[field] || "0") || 0),
+    0,
+  );
+}
+
+function earliestExpiration(items: InventoryItem[]) {
+  let earliest: number | null = null;
+
+  for (const item of items) {
+    const days = daysUntilExpiration(item.expiresAt);
+    if (days === null) continue;
+    if (earliest === null || days < earliest) earliest = days;
+  }
+
+  return earliest;
+}
+
+function latestTimestamp(items: InventoryItem[], field: "updatedAt" | "addedAt") {
+  return Math.max(...items.map((item) => new Date(item[field] || 0).getTime()));
+}
+
 export default function InventoryList({
   initialItems,
 }: {
@@ -82,6 +151,11 @@ export default function InventoryList({
     category: "",
     location: "",
   });
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [brandPicker, setBrandPicker] = useState<{
+    group: ProductGroup;
+    direction: -1 | 1;
+  } | null>(null);
 
   const categories = [
     ...new Set(
@@ -99,103 +173,90 @@ export default function InventoryList({
     ),
   ].sort();
 
-  const isLowStock = (item: InventoryItem) => {
-    const quantity = Number.parseFloat(item.quantityAvailable || "");
-    const threshold = Number.parseFloat(item.lowThreshold || "");
+  const visibleItems = items.filter((item) => {
+    const searchableText = [
+      item.name,
+      item.brand,
+      item.category,
+      item.location,
+      item.notes,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
 
-    return (
-      Number.isFinite(quantity) &&
-      Number.isFinite(threshold) &&
-      quantity <= threshold
-    );
-  };
+    const matchesFilters =
+      (!filters.query ||
+        searchableText.includes(filters.query.trim().toLowerCase())) &&
+      (!filters.category || item.category === filters.category) &&
+      (!filters.location || item.location === filters.location);
 
-  const isExpired = (item: InventoryItem) => {
-    const days = daysUntilExpiration(item.expiresAt);
-    return days !== null && days < 0;
-  };
+    if (!matchesFilters) return false;
 
-  const isExpiringSoon = (item: InventoryItem) => {
-    const days = daysUntilExpiration(item.expiresAt);
-    return days !== null && days >= 0 && days <= 7;
-  };
+    switch (view) {
+      case "attention":
+        return needsAttention(item);
+      case "expired":
+        return isExpired(item);
+      case "expiring-soon":
+        return isExpiringSoon(item);
+      case "low-stock":
+        return isLowStock(item);
+      case "missing-expiration":
+        return !item.expiresAt;
+      default:
+        return true;
+    }
+  });
 
-  const needsAttention = (item: InventoryItem) =>
-    isLowStock(item) || isExpired(item) || isExpiringSoon(item);
+  const groupsById = new Map<string, ProductGroup>();
 
-  const visibleItems = items
-    .filter((item) => {
-      const searchableText = [
-        item.name,
-        item.brand,
-        item.category,
-        item.location,
-        item.notes,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
+  for (const item of visibleItems) {
+    const key = item.productId || item.id;
+    const existing = groupsById.get(key);
 
-      const matchesFilters =
-        (!filters.query ||
-          searchableText.includes(filters.query.trim().toLowerCase())) &&
-        (!filters.category || item.category === filters.category) &&
-        (!filters.location || item.location === filters.location);
+    if (existing) {
+      existing.items.push(item);
+    } else {
+      groupsById.set(key, {
+        productId: key,
+        productName: item.productName || item.name,
+        items: [item],
+      });
+    }
+  }
 
-      if (!matchesFilters) return false;
+  const visibleGroups = [...groupsById.values()].sort((first, second) => {
+    if (view === "expiring-soon") {
+      const firstExpiration = earliestExpiration(first.items) ?? Infinity;
+      const secondExpiration = earliestExpiration(second.items) ?? Infinity;
 
-      switch (view) {
-        case "attention":
-          return needsAttention(item);
-        case "expired":
-          return isExpired(item);
-        case "expiring-soon":
-          return isExpiringSoon(item);
-        case "low-stock":
-          return isLowStock(item);
-        case "missing-expiration":
-          return !item.expiresAt;
-        default:
-          return true;
-      }
-    })
-    .sort((first, second) => {
-      if (view === "expiring-soon") {
-        const firstExpiration =
-          getDateOnly(first.expiresAt)?.getTime() ?? Infinity;
-        const secondExpiration =
-          getDateOnly(second.expiresAt)?.getTime() ?? Infinity;
+      return firstExpiration - secondExpiration;
+    }
 
-        return firstExpiration - secondExpiration;
-      }
+    if (sortBy === "name") {
+      return first.productName.localeCompare(second.productName);
+    }
 
-      if (sortBy === "name") {
-        return first.name.localeCompare(second.name);
-      }
+    if (sortBy === "quantity-low") {
+      const firstUnit = commonUnit(first.items);
+      const secondUnit = commonUnit(second.items);
+      const firstQty = firstUnit ? sumField(first.items, "quantityAvailable") : Infinity;
+      const secondQty = secondUnit ? sumField(second.items, "quantityAvailable") : Infinity;
 
-      if (sortBy === "quantity-low") {
-        return (
-          Number.parseFloat(first.quantityAvailable || "0") -
-          Number.parseFloat(second.quantityAvailable || "0")
-        );
-      }
+      return firstQty - secondQty;
+    }
 
-      if (sortBy === "updated") {
-        return (
-          new Date(second.updatedAt || 0).getTime() -
-          new Date(first.updatedAt || 0).getTime()
-        );
-      }
+    if (sortBy === "updated") {
+      return latestTimestamp(second.items, "updatedAt") - latestTimestamp(first.items, "updatedAt");
+    }
 
-      if (sortBy === "added") {
-        return (
-          new Date(second.addedAt || 0).getTime() -
-          new Date(first.addedAt || 0).getTime()
-        );
-      }
+    if (sortBy === "added") {
+      return latestTimestamp(second.items, "addedAt") - latestTimestamp(first.items, "addedAt");
+    }
 
-      return 0;
-    });
+    return 0;
+  });
 
   const clearFilters = () => {
     setView("all");
@@ -203,6 +264,18 @@ export default function InventoryList({
       query: "",
       category: "",
       location: "",
+    });
+  };
+
+  const toggleExpanded = (productId: string) => {
+    setExpandedGroups((previous) => {
+      const next = new Set(previous);
+      if (next.has(productId)) {
+        next.delete(productId);
+      } else {
+        next.add(productId);
+      }
+      return next;
     });
   };
 
@@ -241,6 +314,17 @@ export default function InventoryList({
     }
   };
 
+  // A group's +/- is unambiguous when there's only one brand in stock; with
+  // more than one, ask which brand before adjusting anything.
+  const handleGroupAdjust = (group: ProductGroup, direction: -1 | 1) => {
+    if (group.items.length === 1) {
+      handleAdjustQuantity(group.items[0], direction);
+      return;
+    }
+
+    setBrandPicker({ group, direction });
+  };
+
   const handleSave = async (updated: InventoryItem) => {
     const previousItem = items.find((item) => item.id === updated.id);
 
@@ -267,6 +351,217 @@ export default function InventoryList({
         );
       }
     }
+  };
+
+  const renderItemRow = (item: InventoryItem, options?: { indent?: boolean }) => {
+    const lowStock = isLowStock(item);
+    const expired = isExpired(item);
+    const expiringSoon = isExpiringSoon(item);
+    const expirationLabel = getExpirationLabel(item);
+
+    return (
+      <article
+        key={item.id}
+        className={`flex flex-col gap-4 p-4 sm:flex-row sm:items-center ${
+          options?.indent ? "sm:pl-12 bg-muted/10" : ""
+        }`}
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          {item.imageUrl ? (
+            <Image
+              src={item.imageUrl}
+              alt={item.name}
+              width={48}
+              height={48}
+              className="size-12 rounded-lg object-cover"
+            />
+          ) : (
+            <div className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-lg">
+              📦
+            </div>
+          )}
+
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="truncate font-medium">{item.name}</h3>
+
+              {expired && (
+                <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-300">
+                  Expired
+                </span>
+              )}
+
+              {!expired && expiringSoon && (
+                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                  {expirationLabel}
+                </span>
+              )}
+
+              {lowStock && (
+                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                  Low stock
+                </span>
+              )}
+            </div>
+
+            <p className="mt-1 truncate text-sm text-muted-foreground">
+              {[item.brand, item.category, item.location]
+                .filter(Boolean)
+                .join(" · ") || "No extra details"}
+            </p>
+
+            {!expired && !expiringSoon && expirationLabel && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {expirationLabel}
+              </p>
+            )}
+
+            {!item.expiresAt && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                No expiration date
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 sm:justify-end">
+          <div className="flex items-center rounded-lg border bg-background">
+            <button
+              type="button"
+              onClick={() => handleAdjustQuantity(item, -1)}
+              className="px-3 py-2 text-lg hover:bg-muted"
+              aria-label={`Decrease ${item.name} quantity`}
+            >
+              −
+            </button>
+
+            <span className="min-w-24 px-2 text-center text-sm font-medium">
+              {item.quantityAvailable || "0"} {item.unit || ""}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => handleAdjustQuantity(item, 1)}
+              className="px-3 py-2 text-lg hover:bg-muted"
+              aria-label={`Increase ${item.name} quantity`}
+            >
+              +
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setEditingItem(item)}
+            className="button-secondary rounded-md px-3 py-2 text-sm font-medium"
+          >
+            Edit
+          </button>
+        </div>
+      </article>
+    );
+  };
+
+  const renderGroup = (group: ProductGroup) => {
+    if (group.items.length === 1) {
+      return renderItemRow(group.items[0]);
+    }
+
+    const unit = commonUnit(group.items);
+    const totalQuantity = unit ? sumField(group.items, "quantityAvailable") : null;
+    const lowStock = group.items.some(isLowStock);
+    const expired = group.items.some(isExpired);
+    const expiringSoon = group.items.some(isExpiringSoon);
+    const isExpanded = expandedGroups.has(group.productId);
+    const brands = group.items
+      .map((item) => item.brand)
+      .filter((brand): brand is string => Boolean(brand));
+
+    return (
+      <div key={group.productId}>
+        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center">
+          <button
+            type="button"
+            onClick={() => toggleExpanded(group.productId)}
+            className="flex min-w-0 flex-1 items-center gap-3 text-left"
+            aria-expanded={isExpanded}
+          >
+            {isExpanded ? (
+              <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+            )}
+
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="truncate font-medium">{group.productName}</h3>
+
+                {expired && (
+                  <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-300">
+                    Expired
+                  </span>
+                )}
+
+                {!expired && expiringSoon && (
+                  <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                    Expiring soon
+                  </span>
+                )}
+
+                {lowStock && (
+                  <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                    Low stock
+                  </span>
+                )}
+              </div>
+
+              <p className="mt-1 truncate text-sm text-muted-foreground">
+                {brands.length > 0
+                  ? brands.join(", ")
+                  : `${group.items.length} brands`}
+              </p>
+            </div>
+          </button>
+
+          <div className="flex items-center justify-between gap-3 sm:justify-end">
+            {unit ? (
+              <div className="flex items-center rounded-lg border bg-background">
+                <button
+                  type="button"
+                  onClick={() => handleGroupAdjust(group, -1)}
+                  className="px-3 py-2 text-lg hover:bg-muted"
+                  aria-label={`Decrease ${group.productName} quantity`}
+                >
+                  −
+                </button>
+
+                <span className="min-w-24 px-2 text-center text-sm font-medium">
+                  {totalQuantity} {unit}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => handleGroupAdjust(group, 1)}
+                  className="px-3 py-2 text-lg hover:bg-muted"
+                  aria-label={`Increase ${group.productName} quantity`}
+                >
+                  +
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Mixed units — expand to adjust
+              </p>
+            )}
+          </div>
+        </div>
+
+        {isExpanded && (
+          <div className="divide-y border-t">
+            {group.items.map((item) => renderItemRow(item, { indent: true }))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -365,7 +660,8 @@ export default function InventoryList({
 
       <div className="flex items-center justify-between gap-3 text-sm">
         <p className="text-muted-foreground">
-          Showing {visibleItems.length} of {items.length} items
+          Showing {visibleGroups.length} of {groupsById.size} products (
+          {visibleItems.length} items)
         </p>
 
         {(view !== "all" ||
@@ -382,7 +678,7 @@ export default function InventoryList({
         )}
       </div>
 
-      {visibleItems.length === 0 ? (
+      {visibleGroups.length === 0 ? (
         <div className="rounded-xl border border-dashed p-8 text-center">
           <p className="font-medium">No inventory items found</p>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -391,111 +687,7 @@ export default function InventoryList({
         </div>
       ) : (
         <div className="divide-y overflow-hidden rounded-xl border bg-card">
-          {visibleItems.map((item) => {
-            const lowStock = isLowStock(item);
-            const expired = isExpired(item);
-            const expiringSoon = isExpiringSoon(item);
-            const expirationLabel = getExpirationLabel(item);
-
-            return (
-              <article
-                key={item.id}
-                className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center"
-              >
-                <div className="flex min-w-0 flex-1 items-center gap-3">
-                  {item.imageUrl ? (
-                    <Image
-                      src={item.imageUrl}
-                      alt={item.name}
-                      width={48}
-                      height={48}
-                      className="size-12 rounded-lg object-cover"
-                    />
-                  ) : (
-                    <div className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-lg">
-                      📦
-                    </div>
-                  )}
-
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="truncate font-medium">{item.name}</h3>
-
-                      {expired && (
-                        <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-300">
-                          Expired
-                        </span>
-                      )}
-
-                      {!expired && expiringSoon && (
-                        <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
-                          {expirationLabel}
-                        </span>
-                      )}
-
-                      {lowStock && (
-                        <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
-                          Low stock
-                        </span>
-                      )}
-                    </div>
-
-                    <p className="mt-1 truncate text-sm text-muted-foreground">
-                      {[item.brand, item.category, item.location]
-                        .filter(Boolean)
-                        .join(" · ") || "No extra details"}
-                    </p>
-
-                    {!expired && !expiringSoon && expirationLabel && (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {expirationLabel}
-                      </p>
-                    )}
-
-                    {!item.expiresAt && (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        No expiration date
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between gap-3 sm:justify-end">
-                  <div className="flex items-center rounded-lg border bg-background">
-                    <button
-                      type="button"
-                      onClick={() => handleAdjustQuantity(item, -1)}
-                      className="px-3 py-2 text-lg hover:bg-muted"
-                      aria-label={`Decrease ${item.name} quantity`}
-                    >
-                      −
-                    </button>
-
-                    <span className="min-w-24 px-2 text-center text-sm font-medium">
-                      {item.quantityAvailable || "0"} {item.unit || ""}
-                    </span>
-
-                    <button
-                      type="button"
-                      onClick={() => handleAdjustQuantity(item, 1)}
-                      className="px-3 py-2 text-lg hover:bg-muted"
-                      aria-label={`Increase ${item.name} quantity`}
-                    >
-                      +
-                    </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setEditingItem(item)}
-                    className="button-secondary rounded-md px-3 py-2 text-sm font-medium"
-                  >
-                    Edit
-                  </button>
-                </div>
-              </article>
-            );
-          })}
+          {visibleGroups.map((group) => renderGroup(group))}
         </div>
       )}
 
@@ -505,6 +697,48 @@ export default function InventoryList({
           onClose={() => setEditingItem(null)}
           onSave={handleSave}
         />
+      )}
+
+      {brandPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 p-4 backdrop-blur-md">
+          <div className="w-full max-w-sm rounded-2xl border border-border bg-[hsl(var(--modal)/0.9)] p-5 shadow-lg">
+            <h3 className="text-base font-semibold">
+              Which {brandPicker.group.productName}?
+            </h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {brandPicker.direction === -1
+                ? "Which brand did you use?"
+                : "Which brand are you restocking?"}
+            </p>
+
+            <div className="mt-4 space-y-2">
+              {brandPicker.group.items.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    handleAdjustQuantity(item, brandPicker.direction);
+                    setBrandPicker(null);
+                  }}
+                  className="flex w-full items-center justify-between rounded-md border px-3 py-2 text-sm hover:bg-muted"
+                >
+                  <span>{item.brand || item.name}</span>
+                  <span className="text-muted-foreground">
+                    {item.quantityAvailable || "0"} {item.unit || ""}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setBrandPicker(null)}
+              className="mt-4 w-full rounded-md border px-3 py-2 text-sm hover:bg-muted"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
