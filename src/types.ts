@@ -36,6 +36,7 @@ export type Product = {
   category?: string | null;
   unit?: string | null;
   brands: string[]; // distinct, non-empty brands already stocked under this product
+  upcs: string[]; // distinct, normalized (normalizeBarcode) UPCs stocked under this product
   itemCount: number;
 };
 
@@ -74,10 +75,15 @@ export type ManualInventoryInput = {
 
 // A possible duplicate pair surfaced by the duplicate-products scan.
 // Never applied automatically - the user picks which product to keep.
+// "upc" means the two products share a barcode - almost certainly the exact
+// same item entered twice (often with inconsistent info the second time).
+// "name" means their names are merely similar - likely the same product
+// under different brands, which is a judgment call rather than a certainty.
 export type DuplicateCandidate = {
   productA: Product;
   productB: Product;
   score: number;
+  matchType: "upc" | "name";
 };
 
 export type SelectOption = { value: string; label: string };

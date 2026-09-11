@@ -20,6 +20,7 @@ import {
   findSimilarProduct,
   guessDecrementStep,
   hasMissingFields,
+  normalizeBarcode,
   normalizeToManualInput,
 } from "@/lib/utils";
 
@@ -105,14 +106,17 @@ export default function ProductSearch({
         return;
       }
 
+      // Normalized so a result in EAN-13 form (leading zero) doesn't slip
+      // past a match already stored in UPC-A form, or vice versa.
       const existingUpcs = new Set(
         matchingInventory
           .map((item) => item.upc)
-          .filter((upc): upc is string => Boolean(upc)),
+          .filter((upc): upc is string => Boolean(upc))
+          .map(normalizeBarcode),
       );
 
       const filteredResults = data.filter(
-        (item) => !existingUpcs.has(item.upc || ""),
+        (item) => !existingUpcs.has(normalizeBarcode(item.upc)),
       );
 
       setResults(filteredResults);
@@ -180,9 +184,21 @@ export default function ProductSearch({
   };
   const getMatchingInventory = async (query: string) => {
     const inventory = await getInventory();
-    const lowerQuery = query.toLowerCase().trim();
+    const trimmedQuery = query.trim();
+    const lowerQuery = trimmedQuery.toLowerCase();
     const matched = inventory
       .filter((item: any) => {
+        // A barcode search should match by UPC directly - the raw digits
+        // almost never appear as text inside name/brand/category/etc, so
+        // without this an item you already own by UPC would never surface
+        // here (and would then also never get filtered out of the "New
+        // Items You Can Add" results below). Normalized because the same
+        // barcode can be stored in either UPC-A or EAN-13 form depending
+        // on which source matched it.
+        if (item.upc && normalizeBarcode(item.upc) === normalizeBarcode(trimmedQuery)) {
+          return true;
+        }
+
         const haystack = [
           item.name,
           item.brand,
