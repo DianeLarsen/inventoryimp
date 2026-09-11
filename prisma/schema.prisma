@@ -13,52 +13,56 @@ datasource db {
   provider = "postgresql"
 }
 
-
-
 model InventoryItem {
-  id                String   @id @default(cuid())
-  name              String
-  brand             String?
-  category          String?
-  quantityAvailable String?   // ✅ Make sure this exists
-  productSize       String?   // ✅ Make sure this exists
-  unit              String?
-  location          String?
-  notes             String?
-  lowThreshold      String?
-  imageUrl          String?
-  upc               String?
-  ingredients       Json?
-  nutrition         Json?
-  decrementStep     String?
-  quantityValue      Decimal? @db.Decimal(12, 3)
-  lowThresholdValue  Decimal? @db.Decimal(12, 3)
-  decrementStepValue Decimal? @db.Decimal(12, 3)
-  expiresAt         DateTime? @db.Date
-  addedAt           DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  userId            String
-  user              User     @relation(fields: [userId], references: [id])
-  purchaseHistory   PurchaseHistory[] 
+  id                 String             @id @default(cuid())
+  name               String
+  brand              String?
+  category           String?
+  quantityAvailable  String? // ✅ Make sure this exists
+  productSize        String? // ✅ Make sure this exists
+  unit               String?
+  location           String?
+  notes              String?
+  lowThreshold       String?
+  imageUrl           String?
+  upc                String?
+  ingredients        Json?
+  nutrition          Json?
+  decrementStep      String?
+  quantityValue      Decimal?           @db.Decimal(12, 3)
+  lowThresholdValue  Decimal?           @db.Decimal(12, 3)
+  decrementStepValue Decimal?           @db.Decimal(12, 3)
+  expiresAt          DateTime?          @db.Date
+  isArchived         Boolean            @default(false)
+  archivedAt         DateTime?
+  addedAt            DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  userId             String
+  user               User               @relation(fields: [userId], references: [id])
+  purchaseHistory    PurchaseHistory[]
+  recipeIngredients  RecipeIngredient[]
+  groceryListItems   GroceryListItem[]
 }
 
-
-
-
 model User {
-  id             String          @id @default(cuid())
+  id             String           @id @default(cuid())
   inventoryItems InventoryItem[]
   aiReceiptUsage AiReceiptUsage[]
+  recipes        Recipe[]
+  mealPlans      MealPlan[]
+  groceryLists   GroceryList[]
 }
 
 model PurchaseHistory {
-  id          String   @id @default(cuid())
+  id          String        @id @default(cuid())
   itemId      String
   item        InventoryItem @relation(fields: [itemId], references: [id])
   cost        Float
   costCents   Int?
   quantity    Float
-  purchasedAt DateTime @default(now())
+  purchasedAt DateTime      @default(now())
+
+  @@index([itemId])
 }
 
 model AiReceiptUsage {
@@ -72,4 +76,126 @@ model AiReceiptUsage {
 
   @@unique([userId, periodStart])
   @@index([userId])
+}
+
+model Recipe {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  title        String
+  description  String?
+  instructions String[] // ordered list of steps
+  servings     Int?
+  prepTimeMins Int?
+  cookTimeMins Int?
+  imageUrl     String?
+  sourceUrl    String?
+  cuisine      String?
+  tags         String[]
+
+  ingredients      RecipeIngredient[]
+  mealPlanEntries  MealPlanEntry[]
+  groceryListItems GroceryListItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model RecipeIngredient {
+  id       String @id @default(cuid())
+  recipeId String
+  recipe   Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  name          String
+  quantityValue Decimal? @db.Decimal(12, 3)
+  unit          String?
+  notes         String?
+  sortOrder     Int      @default(0)
+
+  inventoryItemId String?
+  inventoryItem   InventoryItem? @relation(fields: [inventoryItemId], references: [id])
+  matchConfidence Float? // 0–1 similarity score from the matcher
+  isManualMatch   Boolean        @default(false) // true once a user confirms/overrides it
+
+  @@index([recipeId])
+  @@index([inventoryItemId])
+}
+
+model MealPlan {
+  id        String          @id @default(cuid())
+  userId    String
+  user      User            @relation(fields: [userId], references: [id])
+  name      String?
+  startDate DateTime        @db.Date
+  endDate   DateTime?       @db.Date
+  entries   MealPlanEntry[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([userId])
+}
+
+model MealPlanEntry {
+  id         String   @id @default(cuid())
+  mealPlanId String
+  mealPlan   MealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+  recipeId   String
+  recipe     Recipe   @relation(fields: [recipeId], references: [id])
+  date       DateTime @db.Date
+  mealType   MealType @default(DINNER)
+  servings   Int?
+  notes      String?
+
+  @@index([mealPlanId])
+  @@index([recipeId])
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+}
+
+model GroceryList {
+  id        String            @id @default(cuid())
+  userId    String
+  user      User              @relation(fields: [userId], references: [id])
+  name      String?
+  isActive  Boolean           @default(true)
+  items     GroceryListItem[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([userId])
+}
+
+model GroceryListItem {
+  id            String      @id @default(cuid())
+  groceryListId String
+  groceryList   GroceryList @relation(fields: [groceryListId], references: [id], onDelete: Cascade)
+
+  name          String
+  quantityValue Decimal?  @db.Decimal(12, 3)
+  unit          String?
+  category      String?
+  notes         String?
+  isChecked     Boolean   @default(false)
+  checkedAt     DateTime?
+  sortOrder     Int       @default(0)
+
+  // where the item came from / where it should apply
+  inventoryItemId String?
+  inventoryItem   InventoryItem? @relation(fields: [inventoryItemId], references: [id])
+  sourceRecipeId  String?
+  sourceRecipe    Recipe?        @relation(fields: [sourceRecipeId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([groceryListId])
+  @@index([inventoryItemId])
+  @@index([sourceRecipeId])
 }
