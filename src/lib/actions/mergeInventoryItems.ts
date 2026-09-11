@@ -6,6 +6,7 @@ import { requireCurrentUserId } from "@/lib/current-user";
 
 export type MergedItemFields = {
   name: string;
+  upc: string | null;
   brand: string | null;
   category: string | null;
   unit: string | null;
@@ -14,6 +15,7 @@ export type MergedItemFields = {
   location: string | null;
   lowThreshold: string | null;
   decrementStep: string | null;
+  expiresAt: string | null; // "YYYY-MM-DD", or null to clear it
   notes: string | null;
   imageUrl: string | null;
 };
@@ -62,6 +64,7 @@ export async function mergeInventoryItems(
         where: { id: keepItemId },
         data: {
           name: fields.name,
+          upc: fields.upc,
           brand: fields.brand,
           category: fields.category,
           unit: fields.unit,
@@ -73,6 +76,9 @@ export async function mergeInventoryItems(
           lowThresholdValue: parseDecimalValue(fields.lowThreshold),
           decrementStep: fields.decrementStep,
           decrementStepValue: parseDecimalValue(fields.decrementStep),
+          expiresAt: fields.expiresAt
+            ? new Date(`${fields.expiresAt}T12:00:00.000Z`)
+            : null,
           notes: fields.notes,
           imageUrl: fields.imageUrl,
         },

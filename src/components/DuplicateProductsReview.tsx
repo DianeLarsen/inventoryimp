@@ -210,9 +210,11 @@ export default function DuplicateProductsReview({
           }
           onClose={() => setMergeReview(null)}
           onMerged={() => {
-            setCandidates((previous) =>
-              previous.filter((entry) => keyOf(entry) !== mergeReview.key),
-            );
+            dismiss(mergeReview.candidate);
+            setMergeReview(null);
+          }}
+          onDismissed={() => {
+            dismiss(mergeReview.candidate);
             setMergeReview(null);
           }}
         />
